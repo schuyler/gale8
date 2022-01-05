@@ -59,7 +59,8 @@ def record_stream(stream, bucket, prefix, duration, hour=0, minute=0):
             upload_file(temp.name, bucket, prefix + filename)
 
 def handle_lambda_event(event, context):
-    logging.basicConfig(level=logging.INFO)
+    # https://docs.aws.amazon.com/lambda/latest/dg/python-logging.html
+    logging.getLogger().setLevel(logging.INFO)
     duration = int(event.get("duration", 12*60))
     hour, minute = 0, 0
     if "time" in event:
