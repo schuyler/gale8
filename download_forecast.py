@@ -53,9 +53,10 @@ def wait_until(hour, minute):
 def record_stream(stream, bucket, prefix, duration, hour=0, minute=0):
     if hour or minute:
         wait_until(hour, minute)
+    # Compute the filename at the minute we care about
+    filename = generate_file_name()
     with tempfile.NamedTemporaryFile() as temp:
         if download_stream(stream, temp, duration):
-            filename = generate_file_name()
             upload_file(temp.name, bucket, prefix + filename)
 
 def handle_lambda_event(event, context):
