@@ -1,0 +1,254 @@
+<html>
+<head>
+<title>And now, the Shipping Forecast</title>
+<meta charset="UTF-8" />
+<style type="text/css">
+  body {
+    width: 100%;
+    text-align: center;
+    /*
+       background: #39697f;
+       color: white;
+    */
+    color: #333;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  #container {
+    font-family: sans-serif;
+    width: 90%;
+    max-width: 800px;
+    display: inline-block;
+    text-align: left;
+  }
+
+  #map {
+    width: 100%;
+    position: relative;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  #map img {
+    width: 100%;
+  }
+
+  #playButton {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      font-size: 800%;
+      transform: translate(-50%, -50%);
+  }
+
+  #nowPlaying {
+      display: flex;
+      border: 1px solid #bbb;
+  }
+
+  #nowPlaying span {
+    vertical-align: middle;
+    text-align: center;
+    font-size: 120%;
+    line-height: 400%;
+    flex: auto;
+  }  
+
+  #nowPlaying span.emoji {
+     font-size: 300%;
+     line-height: 150%;
+  }
+
+  #fileTime {
+      font-weight: bold;
+  }
+
+  .shaded {
+      background: #bbb;
+      /* color: #39697f; */
+  }
+
+  #explanation a {
+    text-decoration: underline;
+    /* color: white; */
+    color: #333;
+  }
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+<script>
+
+var broadcastTimes = [ "0048", "0520", "1201", "1754" ];
+var baseUrl = "https://gale8.net/archive/";
+//var baseUrl = "http://gale8-uk.s3-website.eu-west-2.amazonaws.com/archive/";
+var sleepTimer;
+var player;
+
+function zeroPad(n) {
+    return (n < 10 ? "0" : "") + n;
+}
+
+function getDateFromFile(currentFile) {
+    var file = currentFile.substring(baseUrl.length, currentFile.length-4);
+    return new Date(
+        file.substring(0, 4),
+        file.substring(4, 6) - 1,
+        file.substring(6, 8),
+        file.substring(9, 11),
+        file.substring(11, 13), 0);
+}
+
+function getBroadcast(date) {
+    return broadcastTimes.indexOf(
+        zeroPad(date.getHours()) +
+        zeroPad(date.getMinutes()));
+}
+
+function getNextFile(currentFile, setBroadcast) {
+    var date = getDateFromFile(currentFile);
+    var broadcast = getBroadcast(date);
+
+    if (broadcast > 0) {
+        broadcast -= 1;
+    } else {
+        broadcast = broadcastTimes.length - 1;
+        date = new Date(date - 24 * 60 * 60 * 1000);
+    }
+
+    if (setBroadcast !== undefined) {
+        broadcast = setBroadcast;
+    }
+
+    nextFile = date.getFullYear() +
+               zeroPad(date.getMonth() + 1) +
+               zeroPad(date.getDate()) +
+               "Z" + broadcastTimes[broadcast] + ".mp3";
+
+    console.log("getNextFile", nextFile);
+    return baseUrl + nextFile;
+}
+
+function formatFileDate(currentFile) {
+    var date = getDateFromFile(currentFile);
+    return date.toString().substring(0, 21); // e.g. "Wed Jul 28 1993 14:39"
+}
+
+function getPlayer() {
+    return $("#player")[0];
+}
+
+function togglePlayback() {
+    if (player.paused) {
+        player.play();
+    } else {
+        player.pause();
+    }
+}
+
+function playFile(url) {
+    player.src = url;
+    player.load();
+    $("#fileTime").html(formatFileDate(url))
+    updateTimeLeft();
+}
+
+function playNextFile(setBroadcast) {
+    playFile(getNextFile(player.src, setBroadcast));
+    togglePlayback();
+}
+
+function skipAhead(secs) {
+    if (player.duration - player.currentTime > secs) {
+        player.currentTime += secs;
+    } else {
+        playNextFile();
+    }
+}
+
+function updateTimeLeft() {
+    var remaining = player.duration - player.currentTime;
+    var mins = zeroPad(Math.floor(remaining / 60));
+    var secs = zeroPad(Math.floor(remaining % 60));
+    $("#timeLeft").html(isNaN(remaining) ? "--:--" : (mins + ":" + secs));
+}
+
+function resetSleepTimer() {
+    if (sleepTimer) {
+        clearTimeout(sleepTimer);
+    }
+    sleepTimer = setTimeout(function() { player.pause() }, 30 * 60 * 1000);
+    return false
+}
+
+function init() {
+    player = getPlayer();
+    $.ajax({url: baseUrl+"latest.json", dataType: "json"})
+        .done(function(data) {
+            console.log("ajax fetch latest", data.file);
+            var file = baseUrl + data.file;
+            var date = getDateFromFile(file);
+            var broadcast = getBroadcast(date);
+            if (broadcast > 0) {
+                file = getNextFile(file, 0);
+            }
+            playFile(file);
+        });
+    player.addEventListener('play', function() {
+        $("#playButton")[0].style.visibility = "hidden";
+    });
+    player.addEventListener('pause', function() {
+        $("#playButton")[0].style.visibility = "visible";
+    });
+    player.addEventListener('ended', function() {
+        playNextFile(0);
+    });
+    player.addEventListener('timeupdate', function(e) {
+        updateTimeLeft();
+    });
+}
+
+$(document).ready(init);
+</script>
+</head>
+
+<body>
+    <div id="container">
+    <h1>And now, the Shipping Forecast</h1>
+    <div id="map">
+        <a href="#" onClick="togglePlayback(); return resetSleepTimer()">
+            <div><img src="area_map.jpg" /></div>
+            <div id="playButton">⏯</div>
+        </a>
+    </div>
+    <div id="controls">
+        <audio id="player" src=""></audio>
+    </div>
+    <div id="nowPlaying">
+        <span class="shaded">Now Playing:</span>
+        <span id="fileTime">Loading...</span>
+        <span class="shaded">Time Left:</span>
+        <span id="timeLeft">--:--</span>
+        <span class="shaded">
+            <a href="#" title="Skip 30s" onClick="skipAhead(30); return resetSleepTimer()"><span class="emoji">⏩</span></a>
+        </span>
+        <span class="shaded">
+            <a href="#" title="Next broadcast" onClick="playNextFile(); return resetSleepTimer()"><span class="emoji">⏭  </span></a>
+        </span>
+    </div>
+    <div id="explanation">
+        <p>This archive of the UK Met Office Shipping Forecast is updated daily from
+        the <a href="http://bbcmedia.ic.llnwd.net/stream/bbcmedia_radio4lw_mf_p">BBC
+        Radio 4 live feed</a> at 0048, 0520, 1201, and 1754 UK local time.</p>
+        <p>Tap on the map, if you haven't already. The overnight forecast reports will
+        play in reverse chronological order for a half hour or so. Hopefully,
+        you've fallen asleep by then!</p>
+        <p>All audio clips on this site belong to the BBC, and
+        are provided here solely to promote rest, relaxation, and public awareness
+        of maritime safety.</p>
+        <p>Made by <a href="https://twitter.com/schuyler">@schuyler</a>.</p>
+    </div>
+    </div>
+</body>
+</html>
