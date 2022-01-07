@@ -1,8 +1,14 @@
 REGION := eu-west-2
 IAM_ROLE := arn:aws:iam::$(ACCOUNT):role/gale8-lambda
 LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:download-forecast"
+BUCKET = gale8-uk
+DISTRIBUTION = EXV28HJUVSJZY
 
-all: update clean
+all: update index clean
+
+index:
+	aws s3 cp --acl public-read index.html s3://$(BUCKET)/
+	aws cloudfront create-invalidation --distribution-id $(DISTRIBUTION) --paths /index.html
 
 build:
 	zip download-forecast.zip download_forecast.py

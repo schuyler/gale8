@@ -64,6 +64,11 @@
 
   #fileTime {
       font-weight: bold;
+      width: 13em;
+  }
+
+  #timeLeft {
+      width: 5em;
   }
 
   .shaded {
@@ -83,11 +88,16 @@
 var broadcastTimes = [ "0048", "0520", "1201", "1754" ];
 var baseUrl = "https://gale8.net/archive/";
 //var baseUrl = "http://gale8-uk.s3-website.eu-west-2.amazonaws.com/archive/";
+var isLoading;
 var sleepTimer;
 var player;
 
 function zeroPad(n) {
     return (n < 10 ? "0" : "") + n;
+}
+
+function parseDecimal(n) {
+    return parseInt(n, 10);
 }
 
 function getDateFromFile(currentFile) {
@@ -98,6 +108,55 @@ function getDateFromFile(currentFile) {
         file.substring(6, 8),
         file.substring(9, 11),
         file.substring(11, 13), 0);
+}
+
+function getFileFromDate(date, broadcast) {
+    return date.getFullYear() +
+         zeroPad(date.getMonth() + 1) +
+         zeroPad(date.getDate()) +
+         "Z" + broadcastTimes[broadcast || 0] + ".mp3";
+}
+
+function getLondonTime(when) {
+    var date = when.toLocaleString("sv-SE", {timeZone: "Europe/London"});
+    var yr  = date.substr(0, 4);
+    var mo  = date.substr(5, 2);
+    var day = date.substr(8, 2);
+    var hr  = date.substr(11, 2);
+    var min = date.substr(14, 2);
+    var xs = [yr, mo, day, hr, min];
+    return xs.map(parseDecimal);
+}
+
+function getBroadcastFile(when) {
+    if (when === undefined) {
+        when = new Date();
+    }
+    var londonTime = getLondonTime(when);
+    var hr = londonTime[3];
+    var min = londonTime[4];
+
+    var broadcastTime = broadcastTimes[0]; // always the 0048 for now
+    var broadcastHr = broadcastTime.substr(0, 2);
+    var broadcastMin = broadcastTime.substr(2, 2);
+
+    if (hr < broadcastHr || (hr == broadcastHr && min < broadcastMin + 12)) {
+        londonTime = getLondonTime(new Date(when.valueOf() - 86400000)); // previous midnight
+    }
+    
+    var yr = londonTime[0].toString();
+    var mo = zeroPad(londonTime[1]);
+    var day = zeroPad(londonTime[2]);
+    
+    url = [baseUrl, yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
+    console.log("getBroadcastFile", url);
+    return url;
+}
+
+function getRandomBroadcastFile() {
+    var origin = new Date("2017-12-24").valueOf();
+    var when = new Date(Math.random() * (Date.now() - origin) + origin);
+    return getBroadcastFile(when);
 }
 
 function getBroadcast(date) {
@@ -121,11 +180,7 @@ function getNextFile(currentFile, setBroadcast) {
         broadcast = setBroadcast;
     }
 
-    nextFile = date.getFullYear() +
-               zeroPad(date.getMonth() + 1) +
-               zeroPad(date.getDate()) +
-               "Z" + broadcastTimes[broadcast] + ".mp3";
-
+    nextFile = getFileFromDate(date);
     console.log("getNextFile", nextFile);
     return baseUrl + nextFile;
 }
@@ -141,7 +196,17 @@ function getPlayer() {
 
 function togglePlayback() {
     if (player.paused) {
-        player.play();
+        isLoading = true;
+        player.play()
+          .then(function() {
+            isLoading = false;
+            $("#fileTime").html(formatFileDate(player.src));
+            updateTimeLeft();
+          })
+          .catch(function(error) {
+            console.log("Missing media file:", error);
+            setTimeout(function() { playNextFile() }, 500);
+          });
     } else {
         player.pause();
     }
@@ -149,13 +214,13 @@ function togglePlayback() {
 
 function playFile(url) {
     player.src = url;
-    player.load();
-    $("#fileTime").html(formatFileDate(url))
-    updateTimeLeft();
+    $("#fileTime").html("Loading...");
+    //player.load();
 }
 
 function playNextFile(setBroadcast) {
-    playFile(getNextFile(player.src, setBroadcast));
+    //playFile(getNextFile(player.src, setBroadcast));
+    playFile(getRandomBroadcastFile());
     togglePlayback();
 }
 
@@ -184,29 +249,21 @@ function resetSleepTimer() {
 
 function init() {
     player = getPlayer();
-    $.ajax({url: baseUrl+"latest.json", dataType: "json"})
-        .done(function(data) {
-            console.log("ajax fetch latest", data.file);
-            var file = baseUrl + data.file;
-            var date = getDateFromFile(file);
-            var broadcast = getBroadcast(date);
-            if (broadcast > 0) {
-                file = getNextFile(file, 0);
-            }
-            playFile(file);
-        });
     player.addEventListener('play', function() {
         $("#playButton")[0].style.visibility = "hidden";
     });
     player.addEventListener('pause', function() {
-        $("#playButton")[0].style.visibility = "visible";
+        if (!isLoading) {
+          $("#playButton")[0].style.visibility = "visible";
+        }
     });
     player.addEventListener('ended', function() {
-        playNextFile(0);
+        playNextFile();
     });
     player.addEventListener('timeupdate', function(e) {
         updateTimeLeft();
     });
+    playFile(getBroadcastFile());
 }
 
 $(document).ready(init);
@@ -234,19 +291,20 @@ $(document).ready(init);
             <a href="#" title="Skip 30s" onClick="skipAhead(30); return resetSleepTimer()"><span class="emoji">⏩</span></a>
         </span>
         <span class="shaded">
-            <a href="#" title="Next broadcast" onClick="playNextFile(); return resetSleepTimer()"><span class="emoji">⏭  </span></a>
+          <a href="#" title="Next broadcast" onClick="if (!isLoading) playNextFile(); return resetSleepTimer()"><span class="emoji">⏭  </span></a>
         </span>
     </div>
     <div id="explanation">
         <p>This archive of the UK Met Office Shipping Forecast is updated daily from
         the <a href="https://www.bbc.co.uk/sounds/play/live:bbc_radio_fourfm">BBC
         Radio 4 live feed</a> at 0048 and 0520 UK local time.</p>
-        <p>Tap on the map, if you haven't already. The overnight forecast reports will
-        play in reverse chronological order for a half hour or so. Hopefully,
-        you've fallen asleep by then!</p>
-        <p>All audio clips on this site belong to the BBC, and
-        are provided here solely to promote rest, relaxation, and public awareness
-        of maritime safety.</p>
+        <p>Tap on the map, if you haven't already. The most recent overnight
+        forecast reports will play, followed by randomly selected historical
+        forecasts, for a half hour or so. Hopefully, you've fallen asleep by
+        then!</p>
+        <p>All audio clips on this site belong to the BBC, and are provided
+        here solely to promote rest, relaxation, and public awareness of
+        maritime safety.</p>
         <p>Made by <a href="https://twitter.com/schuyler">@schuyler</a>.</p>
     </div>
     </div>
