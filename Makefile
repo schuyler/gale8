@@ -4,22 +4,29 @@ LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:download-forecast"
 BUCKET = gale8-uk
 DISTRIBUTION = EXV28HJUVSJZY
 
-all: update index clean
+all: update check-launch index clean
 
 index:
 	aws s3 cp --acl public-read index.html s3://$(BUCKET)/
 	aws cloudfront create-invalidation --distribution-id $(DISTRIBUTION) --paths /index.html
 
 build:
-	zip download-forecast.zip download_forecast.py
+	mkdir build
+	cp download_forecast.py build
+	pip3 install -t build pytz
+	(cd build && zip -9r - .) > download-forecast.zip
+	rm -r build
 
 update: build
 	aws lambda update-function-code \
 		--function-name download-forecast \
 		--zip-file fileb://download-forecast.zip
 
+check-launch:
+	python3 download_forecast.py -s
+
 clean:
-	rm -rf __pycache__ download-forecast.zip
+	rm -rf __pycache__ build download-forecast.zip
 
 check-account:
 	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
@@ -69,7 +76,7 @@ create-rule-0520: check-account
 		--source-arn arn:aws:events:$(REGION):$(ACCOUNT):rule/forecast-0520 \
 		--statement-id forecast-0520-event
 
-create: create-function create-rule-0048 create-rule-0520 clean
+create: create-function create-rule-0048 create-rule-0520 check-launch clean
 
 destroy:
 	aws lambda delete-function --function-name download-forecast
