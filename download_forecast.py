@@ -51,9 +51,9 @@ def generate_file_name():
 def wait_until(hour, minute):
     now = datetime.now(london)
     start = london.localize(datetime(now.year, now.month, now.day, hour, minute))
-    delay = start - now
+    delay = (start - now).total_seconds()
     if delay > 0:
-        logging.info(f"waiting {delay} sec until {hour}:{minute}")
+        logging.info(f"waiting {delay:.1f} sec until {hour}:{minute}")
         time.sleep(delay)
 
 def record_stream(stream, bucket, prefix, duration, hour=0, minute=0):
@@ -80,7 +80,9 @@ def set_next_launch(hour, minute, test_date=None):
     try:
         start = start.astimezone(pytz.utc) # Cloudwatch events are in UTC!!!
         logging.info(f"setting next launch for {start.isoformat()}")
-        if test_date: return
+        if test_date:
+            logging.info("(running in test mode, not actually updating)")
+            return
         events.put_rule(
             Name=f"forecast-{hour:02}{minute:02}",
             ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)")
@@ -99,7 +101,7 @@ def handle_lambda_event(event, context):
     config = get_config()
     record_stream(config["stream"], config["bucket"], config["prefix"],
                   duration, hour, minute)
-    set_next_launch(hour, minute)
+    set_next_launch(hour, minute, event.get("test_date"))
 
 if __name__ == "__main__":
     import sys
@@ -110,5 +112,7 @@ if __name__ == "__main__":
             when = london.localize(datetime.strptime(sys.argv[2], "%Y-%m-%d"))
         for h, m in ((0, 48), (5, 20)):
             set_next_launch(h, m, when)
-        sys.exit(0)
-    handle_lambda_event({"duration": 5}, {})
+    else:
+        when = datetime.now(london) + timedelta(minutes=1)
+        start = f"{when.hour:02}:{when.minute:02}"
+        handle_lambda_event({"duration": 5, "time": start, "test_date": when}, {})
