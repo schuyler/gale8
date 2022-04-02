@@ -51,7 +51,7 @@ def generate_file_name():
 def wait_until(hour, minute):
     now = datetime.now(london)
     start = london.localize(datetime(now.year, now.month, now.day, hour, minute))
-    delay = start - mark
+    delay = start - now
     if delay > 0:
         logging.info(f"waiting {delay} sec until {hour}:{minute}")
         time.sleep(delay)
