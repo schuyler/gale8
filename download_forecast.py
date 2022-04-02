@@ -76,7 +76,7 @@ def set_next_launch(hour, minute, test_date=None):
             - timedelta(minutes=1))
     if now.dst() != start.dst():
         logging.info(f"*** difference in DST detected for tomorrow! ***")
-    start = start.astimezone(pytz.utc) # Cloudwatch events are in UTC!!!
+    start = start.astimezone(pytz.utc) # Eventbridge schedules are in UTC!!!
     logging.info(f"setting next launch for {start.isoformat()}")
     if test_date:
         logging.info("(running in test mode, so not actually updating)")
@@ -106,6 +106,7 @@ def handle_lambda_event(event, context):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "-s":
+        # Run `python3 download_forecast.py -s` to ensure that Eventbridge rules are DST aware
         set_log_level()
         when = None
         if len(sys.argv) > 2:
