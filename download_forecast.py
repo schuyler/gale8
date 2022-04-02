@@ -74,15 +74,15 @@ def set_next_launch(hour, minute, test_date=None):
     start = london.localize(
             datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
             - timedelta(minutes=1))
-    events = boto3.client('events')
     if now.dst() != start.dst():
         logging.info(f"*** difference in DST detected for tomorrow! ***")
+    start = start.astimezone(pytz.utc) # Cloudwatch events are in UTC!!!
+    logging.info(f"setting next launch for {start.isoformat()}")
+    if test_date:
+        logging.info("(running in test mode, so not actually updating)")
+        return
     try:
-        start = start.astimezone(pytz.utc) # Cloudwatch events are in UTC!!!
-        logging.info(f"setting next launch for {start.isoformat()}")
-        if test_date:
-            logging.info("(running in test mode, not actually updating)")
-            return
+        events = boto3.client('events')
         events.put_rule(
             Name=f"forecast-{hour:02}{minute:02}",
             ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)")
