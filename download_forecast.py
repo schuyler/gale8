@@ -96,8 +96,7 @@ def handle_lambda_event(event, context):
         logging.error(e)
         return
     config = get_config()
-    if hour or minute:
-        wait_until(hour, minute)
+    wait_until(hour, minute)
     record_stream(config["stream"], config["bucket"], config["prefix"], duration)
     set_next_launch(hour, minute, event.get("test_date"))
 
