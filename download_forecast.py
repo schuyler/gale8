@@ -18,6 +18,9 @@ def set_log_level():
     # https://docs.aws.amazon.com/lambda/latest/dg/python-logging.html
     logging.getLogger().setLevel(logging.INFO)
 
+def local_now():
+    return datetime.now(london)
+
 def download_stream(stream, target, secs, block_size=1<<13):
     start = time.time()
     try:
@@ -46,10 +49,10 @@ def upload_file(filename, bucket, object_name=None):
     return True
 
 def generate_file_name():
-    return datetime.now(london).strftime("%Y%m%dZ%H%M") + '.mp3'
+    return local_now().strftime("%Y%m%dZ%H%M") + '.mp3'
 
 def wait_until(hour, minute):
-    now = datetime.now(london)
+    now = local_now()
     start = london.localize(datetime(now.year, now.month, now.day, hour, minute))
     delay = (start - now).total_seconds()
     if delay > 0:
@@ -69,7 +72,7 @@ def set_next_launch(hour, minute, test_date=None):
     if test_date:
         now = test_date
     else:
-        now = datetime.now(london)
+        now = local_now()
     tomorrow = now + timedelta(days=1)
     start = london.localize(
             datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
@@ -114,6 +117,6 @@ if __name__ == "__main__":
         for h, m in ((0, 48), (5, 20)):
             set_next_launch(h, m, when)
     else:
-        when = datetime.now(london) + timedelta(minutes=1)
+        when = local_now() + timedelta(minutes=1)
         start = f"{when.hour:02}:{when.minute:02}"
         handle_lambda_event({"duration": 5, "time": start, "test_date": when}, {})
