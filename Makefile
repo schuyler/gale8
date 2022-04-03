@@ -14,7 +14,7 @@ build:
 	mkdir build
 	cp download_forecast.py build
 	pip3 install -t build pytz
-	(cd build && zip -9r - .) > download-forecast.zip
+	(cd build && zip -9qr - .) > download-forecast.zip
 	rm -r build
 
 update: build
