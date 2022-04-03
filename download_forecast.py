@@ -56,7 +56,7 @@ def wait_until(hour, minute):
     start = london.localize(datetime(now.year, now.month, now.day, hour, minute))
     delay = (start - now).total_seconds()
     if delay > 0:
-        logging.info(f"waiting {delay:.1f} sec until {hour}:{minute}")
+        logging.info(f"waiting {delay:.1f} sec until {hour:2d}:{minute:2d}")
         time.sleep(delay)
 
 def record_stream(stream, bucket, prefix, duration, hour=0, minute=0):
