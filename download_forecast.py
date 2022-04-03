@@ -46,7 +46,7 @@ def upload_file(filename, bucket, object_name=None):
     return True
 
 def generate_file_name():
-    return time.strftime("%Y%m%dZ%H%M") + '.mp3'
+    return datetime.now(london).strftime("%Y%m%dZ%H%M") + '.mp3'
 
 def wait_until(hour, minute):
     now = datetime.now(london)
