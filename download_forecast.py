@@ -59,9 +59,7 @@ def wait_until(hour, minute):
         logging.info(f"waiting {delay:.1f} sec until {hour:02d}:{minute:02d}")
         time.sleep(delay)
 
-def record_stream(stream, bucket, prefix, duration, hour=0, minute=0):
-    if hour or minute:
-        wait_until(hour, minute)
+def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
     filename = generate_file_name()
     with tempfile.NamedTemporaryFile() as temp:
@@ -69,10 +67,7 @@ def record_stream(stream, bucket, prefix, duration, hour=0, minute=0):
             upload_file(temp.name, bucket, prefix + filename)
 
 def set_next_launch(hour, minute, test_date=None):
-    if test_date:
-        now = test_date
-    else:
-        now = local_now()
+    now = test_date or local_now()
     tomorrow = now + timedelta(days=1)
     start = london.localize(
             datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
@@ -95,15 +90,15 @@ def set_next_launch(hour, minute, test_date=None):
 def handle_lambda_event(event, context):
     set_log_level()
     duration = int(event.get("duration", 12*60))
-    hour, minute = 0, 0
-    if "time" in event:
-        try:
-            hour, minute = map(int, event["time"].split(":"))
-        except Exception as e:
-            logging.error(e)
+    try:
+        hour, minute = map(int, event["time"].split(":"))
+    except Exception as e:
+        logging.error(e)
+        return
     config = get_config()
-    record_stream(config["stream"], config["bucket"], config["prefix"],
-                  duration, hour, minute)
+    if hour or minute:
+        wait_until(hour, minute)
+    record_stream(config["stream"], config["bucket"], config["prefix"], duration)
     set_next_launch(hour, minute, event.get("test_date"))
 
 if __name__ == "__main__":
