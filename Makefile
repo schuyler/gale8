@@ -7,7 +7,7 @@ DISTRIBUTION = EXV28HJUVSJZY
 all: update check-launch index clean
 
 index:
-	aws s3 cp --acl public-read index.html s3://$(BUCKET)/
+	aws s3 sync --acl public-read docs/ s3://$(BUCKET)/
 	aws cloudfront create-invalidation --distribution-id $(DISTRIBUTION) --paths /index.html
 
 build:
