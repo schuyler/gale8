@@ -1,4 +1,4 @@
-import time, os, logging, tempfile
+import time, os, logging, tempfile, json, re
 import boto3, pytz
 from datetime import datetime, timedelta
 from urllib.request import urlopen
@@ -17,6 +17,9 @@ def get_config():
 def set_log_level():
     # https://docs.aws.amazon.com/lambda/latest/dg/python-logging.html
     logging.getLogger().setLevel(logging.INFO)
+
+def in_production():
+    return os.environ.get("AWS_EXECUTION_ENV") is not None
 
 def local_now():
     return datetime.now(london)
@@ -42,7 +45,10 @@ def upload_file(filename, bucket, object_name=None):
     extra_args={'ACL': 'public-read'}
     try:
         logging.info(f"uploading {filename} to s3://{bucket}/{object_name}")
-        response = s3_client.upload_file(filename, bucket, object_name, ExtraArgs=extra_args)
+        if in_production():
+            s3_client.upload_file(filename, bucket, object_name, ExtraArgs=extra_args)
+        else:
+            logging.info(f"(not running in production; upload skipped)")
     except ClientError as e:
         logging.error(e)
         return False
@@ -65,6 +71,29 @@ def record_stream(stream, bucket, prefix, duration):
     with tempfile.NamedTemporaryFile() as temp:
         if download_stream(stream, temp, duration):
             upload_file(temp.name, bucket, prefix + filename)
+            return filename
+    return ""
+
+def update_catalog(bucket_name, prefix, catalog_name="catalog.json"):
+    session = boto3.Session()
+    s3 = session.resource('s3')
+    bucket = s3.Bucket(bucket_name)
+
+    filename = re.compile(f'.*{prefix}(....)(..)(..)Z(....).mp3$')
+    catalog = {}
+
+    for obj in bucket.objects.all():
+        m = filename.match(obj.key)
+        if not m: continue
+        year, month, day, timing = m.groups()
+        catalog.setdefault(year, {}) \
+               .setdefault(month, {}) \
+               .setdefault(day, []) \
+               .append(timing)
+
+    with tempfile.NamedTemporaryFile(mode="w") as temp:
+        json.dump(catalog, temp)
+        upload_file(temp.name, bucket_name, prefix + catalog_name)
 
 def set_next_launch(hour, minute, test_date=None):
     now = test_date or local_now()
@@ -98,6 +127,7 @@ def handle_lambda_event(event, context):
     config = get_config()
     wait_until(hour, minute)
     record_stream(config["stream"], config["bucket"], config["prefix"], duration)
+    update_catalog(config["bucket"], config["prefix"])
     set_next_launch(hour, minute, event.get("test_date"))
 
 if __name__ == "__main__":
