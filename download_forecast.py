@@ -93,6 +93,7 @@ def update_catalog(bucket_name, prefix, catalog_name="catalog.json"):
 
     with tempfile.NamedTemporaryFile(mode="w") as temp:
         json.dump(catalog, temp)
+        temp.flush() # make sure the entire JSON stream is flushed to disk
         upload_file(temp.name, bucket_name, prefix + catalog_name)
 
 def set_next_launch(hour, minute, test_date=None):
