@@ -6,4 +6,5 @@ build
 detection/model
 .env
 build
+detection/model
 __pycache__
