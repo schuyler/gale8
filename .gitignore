@@ -1,7 +1,6 @@
 *.zip
 *.mp3
 docs/archive/catalog.json
-detection/model
 .env
 build
 detection/model
