@@ -3,4 +3,5 @@
 docs/archive/catalog.json
 .env
 build
+detection/model
 __pycache__
