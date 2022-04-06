@@ -10,7 +10,7 @@ import time
 SetLogLevel(-1)
 
 if not os.path.exists("model"):
-    print ("Please download the model from https://alphacephei.com/vosk/models and unpack as 'model' in the current folder.")
+    print ("Model expected in model/")
     exit (1)
 
 sample_rate=16000
@@ -22,23 +22,27 @@ process = subprocess.Popen(['ffmpeg', '-loglevel', 'quiet', '-i',
                             '-ar', str(sample_rate) , '-ac', '1', '-f', 's16le', '-'],
                             stdout=subprocess.PIPE)
 
-bytes_read = 0
-found = False
+found = []
 start = time.time()
+bytes_read = 0
+seen = False
 
-while bytes_read < sample_rate * 180:
-    data = process.stdout.read(4000)
-    bytes_read += len(data)
+while True:
+    data = process.stdout.read(sample_rate)
     if len(data) == 0:
         break
-    if rec.AcceptWaveform(data):
+    complete = rec.AcceptWaveform(data)
+    if complete:
         result = rec.Result()
     else:
         result = rec.PartialResult()
-    if "shipping" in result:
-        found = True
-        break
+    if "shipping" in result and not seen:
+        found.append(bytes_read / sample_rate)
+        seen = True
+    if complete:
+        print(seen, result.replace("\n", " "))
+        seen = False
+    bytes_read += len(data)
 
-if found:
-    print("{:.2f}s".format(bytes_read / sample_rate))
+print([round(t, 2) for t in found])
 print("elapsed: {:.2f}s".format(time.time() - start))
