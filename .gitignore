@@ -1,4 +1,5 @@
 *.zip
 *.mp3
 docs/archive/catalog.json
+detection/model
 __pycache__
