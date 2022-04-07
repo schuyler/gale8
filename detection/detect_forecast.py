@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
 from vosk import Model, KaldiRecognizer, SetLogLevel
-import sys
-import os
-import wave
-import subprocess
-import time
+import sys, os, time
+import subprocess, multiprocessing, json
 
 SetLogLevel(-1)
 
@@ -13,36 +10,65 @@ if not os.path.exists("model"):
     print ("Model expected in model/")
     exit (1)
 
-sample_rate=16000
-model = Model("model")
-rec = KaldiRecognizer(model, sample_rate)
+sample_rate = 16000
+bytes_per_sample = sample_rate * 2
+window_size = bytes_per_sample // 8
+limit = 120
 
-process = subprocess.Popen(['ffmpeg', '-loglevel', 'quiet', '-i',
-                            sys.argv[1],
-                            '-ar', str(sample_rate) , '-ac', '1', '-f', 's16le', '-'],
-                            stdout=subprocess.PIPE)
+triggers = ("shipping",)
+model = rec = None
 
-found = []
-start = time.time()
-bytes_read = 0
-seen = False
+def get_model():
+    print(f"greetings from #{os.getpid()}", file=sys.stderr)
+    global model, rec
+    if model or rec:
+        raise("model or rec was already initialized")
+    model = Model("model")
+    rec = KaldiRecognizer(model, sample_rate)
 
-while True:
-    data = process.stdout.read(sample_rate)
-    if len(data) == 0:
-        break
-    complete = rec.AcceptWaveform(data)
-    if complete:
-        result = rec.Result()
-    else:
-        result = rec.PartialResult()
-    if "shipping" in result and not seen:
-        found.append(bytes_read / sample_rate)
-        seen = True
-    if complete:
-        print(seen, result.replace("\n", " "))
-        seen = False
-    bytes_read += len(data)
+def detect(filename):
+    if not os.path.exists(filename):
+        return ("", [])
 
-print([round(t, 2) for t in found])
-print("elapsed: {:.2f}s".format(time.time() - start))
+    process = subprocess.Popen(
+            ['ffmpeg', '-loglevel', 'quiet', '-i',
+            filename,
+            '-ar', str(sample_rate) , '-ac', '1', '-f', 's16le', '-'],
+            stdout=subprocess.PIPE)
+
+    found = []
+    start = time.time()
+    bytes_read = 0
+    seen = False
+
+    rec.Reset()
+    while True:
+        data = process.stdout.read(window_size)
+        if len(data) == 0:
+            break
+        complete = rec.AcceptWaveform(data)
+        if complete:
+            result = rec.Result()
+        else:
+            result = rec.PartialResult()
+        if not seen and any(p for p in triggers if p in result):
+            found.append(bytes_read / float(bytes_per_sample))
+            seen = True
+        if complete:
+            #print(seen, result.replace("\n", " "))
+            seen = False
+        bytes_read += len(data)
+        if limit and (seen or bytes_read > limit * bytes_per_sample):
+            break
+
+    cues = [round(t, 2) for t in found]
+    #with open(f"{filename}.json", "w") as f:
+    #    json.dump({"cues": cues}, f)
+
+    print("{} {} ({:.2f}s elapsed)".format(filename, cues, time.time() - start), file=sys.stderr)
+    return (filename, cues)
+
+if __name__ == "__main__":
+    with multiprocessing.Pool(processes=4, initializer=get_model) as p:
+        for filename, cues in p.map(detect, sys.argv[1:]):
+            print(f"play {filename} trim 0:{cues[-1] - 0.625} 1")
