@@ -1,6 +1,7 @@
 # Install prereqs
 
 ```
+apt-get install sox ffmpeg
 pip install -r requirements.txt
 ```
 
