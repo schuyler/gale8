@@ -1,9 +1,9 @@
 REGION := eu-west-2
 IAM_ROLE := arn:aws:iam::$(ACCOUNT):role/gale8-lambda
-LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:download-forecast"
 BUCKET = gale8-uk
 DISTRIBUTION = EXV28HJUVSJZY
-FUNCTION=download-forecast
+FUNCTION = download-forecast
+LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:$(FUNCTION)"
 
 all: update check-launch index clean
 
@@ -26,8 +26,63 @@ update: build
 check-launch:
 	python3 download_forecast.py -s
 
+support: build-support install-support configure-support clean
+
+install-support:
+	aws s3 cp $(FUNCTION)-support.zip s3://$(BUCKET)/layers/$(FUNCTION)-support.zip
+	aws lambda publish-layer-version \
+		--layer-name $(FUNCTION)-support \
+		--content S3Bucket=$(BUCKET),S3Key=layers/$(FUNCTION)-support.zip
+
+configure-support:
+	aws lambda list-layer-versions --layer-name download-forecast-support \
+		--query 'LayerVersions[0].LayerVersionArn' \
+		--output text \
+		> support-arn.txt
+	aws lambda update-function-configuration --function-name $(FUNCTION) \
+		--layers `cat support-arn.txt`
+	rm -f support-arn.txt
+
+clean-support:
+	aws lambda list-layer-versions --layer-name download-forecast-support \
+		--query 'LayerVersions[1].Version' \
+		--output text \
+		> support-version.txt
+	aws lambda delete-layer-version --layer-name $(FUNCTION)-support \
+		--version-number `cat support-version.txt` \
+		2>/dev/null || true
+	rm -f support-version.txt
+
+build-support: install-ffmpeg install-vosk install-pytz
+	(cd build && zip -9r - .) > $(FUNCTION)-support.zip
+	rm -r build
+
+install-ffmpeg:
+	mkdir -p build/bin
+	wget -O- https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | \
+		tar -xf -
+	cp ffmpeg-*-amd64-static/ffmpeg build/bin
+	rm -rf ffmeg-*-amd64-static
+
+install-vosk:
+	mkdir -p build/python
+	pip install --target build/python \
+		--platform manylinux2010_x86_64 \
+		--implementation cp \
+		--python 3.9 \
+		--only-binary=:all: \
+		vosk
+	wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+	unzip -d build vosk-model-small-en-us-*.zip
+	mv build/vosk-model* build/model
+	rm -rf vosk-model-small-en-us-*.zip
+
+install-pytz:
+	mkdir -p build/python
+	pip install --target build/python pytz
+
 clean:
-	rm -rf __pycache__ build $(FUNCTION).zip
+	rm -rf __pycache__ build $(FUNCTION).zip $(FUNCTION)-support.zip support-*.txt
 
 check-account:
 	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
@@ -74,7 +129,7 @@ delete-rule-1754: check-account
 
 create: create-function \
 	create-rule-0048 create-rule-0520 create-rule-1201 create-rule-1754 \
-	check-launch clean
+	build support clean
 
 destroy: delete-function \
 	delete-rule-0048 delete-rule-0520 delete-rule-1201 delete-rule-1754 \
