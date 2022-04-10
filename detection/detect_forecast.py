@@ -12,8 +12,8 @@ if not os.path.exists("model"):
 
 sample_rate = 16000
 bytes_per_sample = sample_rate * 2
-window_size = bytes_per_sample // 8
-limit = 120
+window_size = bytes_per_sample // 4
+limit = 0 #120
 
 triggers = ("shipping",)
 model = rec = None
@@ -58,17 +58,24 @@ def detect(filename):
             #print(seen, result.replace("\n", " "))
             seen = False
         bytes_read += len(data)
-        if limit and (seen or bytes_read > limit * bytes_per_sample):
-            break
+        #if limit and (seen or bytes_read > limit * bytes_per_sample):
+        #    break
 
-    cues = [round(t, 2) for t in found]
-    #with open(f"{filename}.json", "w") as f:
-    #    json.dump({"cues": cues}, f)
+    cues = [round(t - 0.625, 3) for t in found]
+    with open(f"{filename}.json", "w") as f:
+        json.dump({
+            "file": os.path.basename(filename),
+            "cues": cues,
+            "length": round(bytes_read / float(bytes_per_sample), 3)
+        }, f)
 
     print("{} {} ({:.2f}s elapsed)".format(filename, cues, time.time() - start), file=sys.stderr)
     return (filename, cues)
 
 if __name__ == "__main__":
-    with multiprocessing.Pool(processes=4, initializer=get_model) as p:
+    with multiprocessing.Pool(processes=6, initializer=get_model) as p:
         for filename, cues in p.map(detect, sys.argv[1:]):
-            print(f"play {filename} trim 0:{cues[-1] - 0.625} 1")
+            if cues:
+                #out = "shipping/" + os.path.basename(filename).replace(".mp3", ".wav")
+                #print(f"sox {filename} {out} trim 0:{cues[-1] - 0.625:.2f} 1 rate {sample_rate}")
+                print(filename, " ".join(map(str, cues)))
