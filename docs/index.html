@@ -206,7 +206,7 @@ function getPlayer() {
 
 function flashPlayButton(n) {
     if (!n) return;
-    $("#playButton").fadeOut(500).fadeIn(500, () => flashPlayButton(n-1));
+    $("#playButton").fadeOut(1000).fadeIn(1000, () => flashPlayButton(n-1));
 }
 
 function togglePlayback() {
@@ -361,6 +361,8 @@ function init() {
     $("#broadcastMonth").change(monthSelected);
     $("#broadcastDay").change(daySelected);
     $("#broadcastTime").change(broadcastSelected);
+
+    flashPlayButton(3);
 }
 
 $(document).ready(init);
