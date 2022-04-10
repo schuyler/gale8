@@ -3,6 +3,7 @@ IAM_ROLE := arn:aws:iam::$(ACCOUNT):role/gale8-lambda
 LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:download-forecast"
 BUCKET = gale8-uk
 DISTRIBUTION = EXV28HJUVSJZY
+FUNCTION=download-forecast
 
 all: update check-launch index clean
 
@@ -14,19 +15,19 @@ build:
 	mkdir build
 	cp download_forecast.py build
 	pip3 install -t build pytz
-	(cd build && zip -9qr - .) > download-forecast.zip
+	(cd build && zip -9qr - .) > $(FUNCTION).zip
 	rm -r build
 
 update: build
 	aws lambda update-function-code \
-		--function-name download-forecast \
-		--zip-file fileb://download-forecast.zip
+		--function-name $(FUNCTION) \
+		--zip-file fileb://$(FUNCTION).zip
 
 check-launch:
 	python3 download_forecast.py -s
 
 clean:
-	rm -rf __pycache__ build download-forecast.zip
+	rm -rf __pycache__ build $(FUNCTION).zip
 
 check-account:
 	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
@@ -36,7 +37,7 @@ check-stream:
 
 create-function: check-account check-stream build
 	aws lambda create-function \
-		--function-name download-forecast \
+		--function-name $(FUNCTION) \
 		--handler download_forecast.handle_lambda_event \
 		--runtime python3.9 \
 		--role $(IAM_ROLE) \
@@ -44,43 +45,37 @@ create-function: check-account check-stream build
 		--timeout 900 \
 		--zip-file fileb://download-forecast.zip
 
+delete-function:
+	aws lambda delete-function --function-name $(FUNCTION)
+
 create-rule-0048: check-account
-	aws events put-rule \
-		--name forecast-0048 \
-		--schedule-expression 'cron(47 00 ? * * *)'
-	./gen-target.sh $(LAMBDA_ARN) 00:48 > tmp.json
-	aws events put-targets \
-		--rule forecast-0048 \
-		--targets file://tmp.json
-	rm -f tmp.json
-	aws lambda add-permission \
-		--function-name download-forecast \
-		--action 'lambda:InvokeFunction' \
-		--principal events.amazonaws.com \
-		--source-arn arn:aws:events:$(REGION):$(ACCOUNT):rule/forecast-0048 \
-		--statement-id forecast-0048-event
+	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 00 48 12
+
+delete-rule-0048: check-account
+	tools/del-rule.sh $(FUNCTION) 00 48
 
 create-rule-0520: check-account
-	aws events put-rule \
-		--name forecast-0520 \
-		--schedule-expression 'cron(19 05 ? * * *)'
-	./gen-target.sh $(LAMBDA_ARN) 05:20 > tmp.json
-	aws events put-targets \
-		--rule forecast-0520 \
-		--targets file://tmp.json
-	rm -f tmp.json
-	aws lambda add-permission \
-		--function-name download-forecast \
-		--action 'lambda:InvokeFunction' \
-		--principal events.amazonaws.com \
-		--source-arn arn:aws:events:$(REGION):$(ACCOUNT):rule/forecast-0520 \
-		--statement-id forecast-0520-event
+	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 05 20 12
 
-create: create-function create-rule-0048 create-rule-0520 check-launch clean
+delete-rule-0520: check-account
+	tools/del-rule.sh $(FUNCTION) 05 20
 
-destroy:
-	aws lambda delete-function --function-name download-forecast
-	aws events remove-targets --rule forecast-0048 --ids 1
-	aws events delete-rule --name forecast-0048
-	aws events remove-targets --rule forecast-0520 --ids 1
-	aws events delete-rule --name forecast-0520
+create-rule-1201: check-account
+	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 12 01 7
+
+delete-rule-1201: check-account
+	tools/del-rule.sh $(FUNCTION) 12 01
+
+create-rule-1754: check-account
+	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 17 54 7
+
+delete-rule-1754: check-account
+	tools/del-rule.sh $(FUNCTION) 17 54
+
+create: create-function \
+	create-rule-0048 create-rule-0520 create-rule-1201 create-rule-1754 \
+	check-launch clean
+
+destroy: delete-function \
+	delete-rule-0048 delete-rule-0520 delete-rule-1201 delete-rule-1754 \
+	clean

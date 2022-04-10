@@ -139,7 +139,7 @@ if __name__ == "__main__":
         when = None
         if len(sys.argv) > 2:
             when = london.localize(datetime.strptime(sys.argv[2], "%Y-%m-%d"))
-        for h, m in ((0, 48), (5, 20)):
+        for h, m in ((0, 48), (5, 20), (12, 1), (17, 54)):
             set_next_launch(h, m, when)
     else:
         when = local_now() + timedelta(minutes=1)
