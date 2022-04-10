@@ -98,6 +98,9 @@ var baseUrl = "https://gale8.net/archive/";
 var isLoading;
 var sleepTimer;
 var player;
+var catalog;
+
+var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function zeroPad(n) {
     return (n < 10 ? "0" : "") + n;
@@ -254,6 +257,74 @@ function resetSleepTimer() {
     return false
 }
 
+function loadCatalog(data) {
+    catalog = data;
+    var years = Object.keys(catalog).sort().reverse();
+    for (year of years) {
+        $('#broadcastYear').append($('<option>', { 
+            value: year,
+            text : year 
+       }));
+    }
+}
+
+function yearSelected() {
+    var year = $("#broadcastYear option:selected").val();
+    var months = Object.keys(catalog[year]).sort();
+    $('#broadcastMonth option:not(:first-child)').remove();
+    $('#broadcastDay option:not(:first-child)').remove();
+    $('#broadcastTime option:not(:first-child)').remove();
+    for (month of months) {
+        $('#broadcastMonth').append($('<option>', { 
+            value: month,
+            text : monthNames[parseInt(month)-1]
+       }));
+    }
+}
+
+function monthSelected() {
+    var year = $("#broadcastYear option:selected").val();
+    var month = $("#broadcastMonth option:selected").val();
+    console.log("monthSelected", year, month);
+    var days = Object.keys(catalog[year][month]).sort();
+    $('#broadcastDay option:not(:first-child)').remove();
+    $('#broadcastTime option:not(:first-child)').remove();
+    for (day of days) {
+        $('#broadcastDay').append($('<option>', { 
+            value: day,
+            text : day
+       }));
+    }
+}
+
+function daySelected() {
+    var year = $("#broadcastYear option:selected").val();
+    var month = $("#broadcastMonth option:selected").val();
+    var day = $("#broadcastDay option:selected").val();
+    var times = catalog[year][month][day];
+    $('#broadcastTime option:not(:first-child)').remove();
+    for (time of times) {
+        $('#broadcastTime').append($('<option>', { 
+            value: time,
+            text : time
+       }));
+    }
+}
+
+function broadcastSelected() {
+    var yr = $("#broadcastYear option:selected").val();
+    var mo = $("#broadcastMonth option:selected").val();
+    var day = $("#broadcastDay option:selected").val();
+    var broadcastTime = $("#broadcastTime option:selected").val();
+
+    if (!yr || !mo || !day || !broadcastTime) return;
+
+    var url = [baseUrl, yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
+    console.log("broadcastSelected", url);
+    playFile(url);
+    if (player.paused) togglePlayback();
+}
+
 function init() {
     player = getPlayer();
     player.addEventListener('play', function() {
@@ -271,6 +342,15 @@ function init() {
         updateTimeLeft();
     });
     playFile(getBroadcastFile());
+
+    fetch("archive/catalog.json")
+        .then(res => res.json())
+        .then(data => loadCatalog(data));
+
+    $("#broadcastYear").change(yearSelected);
+    $("#broadcastMonth").change(monthSelected);
+    $("#broadcastDay").change(daySelected);
+    $("#broadcastTime").change(broadcastSelected);
 }
 
 $(document).ready(init);
@@ -281,7 +361,7 @@ $(document).ready(init);
     <div id="container">
     <h1>And now, the Shipping Forecast</h1>
     <div id="map">
-        <a href="#" onClick="togglePlayback(); return resetSleepTimer()">
+        <a href="#" onClick="togglePlayback(); resetSleepTimer()">
             <div><img src="area_map.jpg" /></div>
             <div id="playButton">⏯</div>
         </a>
@@ -295,10 +375,10 @@ $(document).ready(init);
         <span class="shaded">Time Left:</span>
         <span id="timeLeft">--:--</span>
         <span class="shaded">
-            <a href="#" title="Skip 30s" onClick="skipAhead(30); return resetSleepTimer()"><span class="emoji">⏩</span></a>
+            <a href="#" title="Skip 30s" onClick="skipAhead(30); resetSleepTimer()"><span class="emoji">⏩</span></a>
         </span>
         <span class="shaded">
-          <a href="#" title="Next broadcast" onClick="if (!isLoading) playNextFile(); return resetSleepTimer()"><span class="emoji">⏭  </span></a>
+          <a href="#" title="Next broadcast" onClick="if (!isLoading) playNextFile(); resetSleepTimer()"><span class="emoji">⏭  </span></a>
         </span>
     </div>
     <div id="explanation">
@@ -309,6 +389,21 @@ $(document).ready(init);
         forecast reports will play, followed by randomly selected historical
         forecasts, for a half hour or so. Hopefully, you've fallen asleep by
         then!</p>
+        <div id="broadcastSelect">
+            You can also listen to an historical forecast:
+            <select id="broadcastYear" name="broadcastYear">
+                <option value="">YYYY</option>
+            </select>
+            <select id="broadcastMonth" name="broadcastMonth">
+                <option value="">MM</option>
+            </select>
+            <select id="broadcastDay" name="broadcastDay">
+                <option value="">DD</option>
+            </select>
+            <select id="broadcastTime" name="broadcastTime">
+                <option value="">--:--</option>
+            </select>
+        </div>
         <p>All audio clips on this site belong to the BBC, and are provided
         here solely to promote rest, relaxation, and public awareness of
         maritime safety.</p>
