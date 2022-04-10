@@ -1,4 +1,6 @@
 *.zip
 *.mp3
 docs/archive/catalog.json
+.env
+build
 __pycache__
