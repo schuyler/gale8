@@ -204,19 +204,29 @@ function getPlayer() {
     return $("#player")[0];
 }
 
+function flashPlayButton(n) {
+    if (!n) return;
+    $("#playButton").fadeOut(500).fadeIn(500, () => flashPlayButton(n-1));
+}
+
 function togglePlayback() {
     if (player.paused) {
         isLoading = true;
         player.play()
-          .then(function() {
-            isLoading = false;
-            $("#fileTime").html(formatFileDate(player.src));
-            updateTimeLeft();
-          })
-          .catch(function(error) {
-            console.log("Missing media file:", error);
-            setTimeout(function() { playNextFile() }, 500);
-          });
+            .then(function() {
+                isLoading = false;
+                $("#fileTime").html(formatFileDate(player.src));
+                updateTimeLeft();
+            })
+            .catch(function(error) {
+                if (error.name == "NotAllowedError") {
+                    console.log("Media playback not permitted yet:", error);
+                    flashPlayButton(3);
+                } else {
+                    console.log("Missing media file:", error);
+                    setTimeout(function() { playNextFile() }, 500);
+                }
+            });
     } else {
         player.pause();
     }
