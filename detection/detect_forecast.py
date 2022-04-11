@@ -13,18 +13,19 @@ if not os.path.exists("model"):
 sample_rate = 16000
 bytes_per_sample = sample_rate * 2
 window_size = bytes_per_sample // 4
-limit = 0 #120
 
-triggers = ("shipping",)
+triggers = {"shipping": 0.625, "forecast": 0.625, "bulletin": 0.625, "bbc": 0.5, "radio": 0.5}
 model = rec = None
+output_path = ""
 
-def get_model():
+def get_model(output):
     print(f"greetings from #{os.getpid()}", file=sys.stderr)
-    global model, rec
+    global model, rec, output_path
     if model or rec:
         raise("model or rec was already initialized")
     model = Model("model")
     rec = KaldiRecognizer(model, sample_rate)
+    output_path = output
 
 def detect(filename):
     if not os.path.exists(filename):
@@ -36,10 +37,11 @@ def detect(filename):
             '-ar', str(sample_rate) , '-ac', '1', '-f', 's16le', '-'],
             stdout=subprocess.PIPE)
 
-    found = []
+    cues = {}
+    seen = {}
+    lines = []
     start = time.time()
-    bytes_read = 0
-    seen = False
+    bytes_read = line_start = 0
 
     rec.Reset()
     while True:
@@ -49,23 +51,30 @@ def detect(filename):
         complete = rec.AcceptWaveform(data)
         if complete:
             result = rec.Result()
+            parsed = json.loads(result)
+            text = parsed.get("text")
+            if text:
+                lines.append([round(line_start, 3), text])
         else:
             result = rec.PartialResult()
-        if not seen and any(p for p in triggers if p in result):
-            found.append(bytes_read / float(bytes_per_sample))
-            seen = True
-        if complete:
-            #print(seen, result.replace("\n", " "))
-            seen = False
+        for trigger, cue_latency in triggers.items():
+            if trigger in seen: continue
+            if trigger in result:
+                cues.setdefault(trigger, [])
+                cue_start = bytes_read / float(bytes_per_sample) - cue_latency
+                cues[trigger].append(round(cue_start, 3))
+                seen[trigger] = True
         bytes_read += len(data)
-        #if limit and (seen or bytes_read > limit * bytes_per_sample):
-        #    break
+        if complete:
+            line_start = bytes_read / bytes_per_sample
+            seen = {}
 
-    cues = [round(t - 0.625, 3) for t in found]
-    with open(f"{filename}.json", "w") as f:
+    basename = os.path.basename(filename)
+    with open(f"{output_path}/{basename}.json", "w") as f:
         json.dump({
-            "file": os.path.basename(filename),
+            "file": basename,
             "cues": cues,
+            "transcript": lines,
             "length": round(bytes_read / float(bytes_per_sample), 3)
         }, f)
 
@@ -73,9 +82,10 @@ def detect(filename):
     return (filename, cues)
 
 if __name__ == "__main__":
-    with multiprocessing.Pool(processes=6, initializer=get_model) as p:
-        for filename, cues in p.map(detect, sys.argv[1:]):
-            if cues:
-                #out = "shipping/" + os.path.basename(filename).replace(".mp3", ".wav")
-                #print(f"sox {filename} {out} trim 0:{cues[-1] - 0.625:.2f} 1 rate {sample_rate}")
-                print(filename, " ".join(map(str, cues)))
+    output_path = sys.argv[1]
+    files = sys.argv[2:]
+    if not output_path or not files:
+        raise Error(f"Usage: {sys.argv[0]} <output_path> <files>...")
+    with multiprocessing.Pool(processes=6, initializer=get_model, initargs=(output_path,)) as p:
+        for filename, cues in p.map(detect, files):
+            print(filename, cues)
