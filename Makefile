@@ -7,26 +7,49 @@ LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:$(FUNCTION)"
 
 all: update check-launch index clean
 
+clean:
+	rm -rf __pycache__ build *.zip support-*.txt
+
 index:
 	aws s3 sync --acl public-read docs/ s3://$(BUCKET)/
 	aws cloudfront create-invalidation --distribution-id $(DISTRIBUTION) --paths /index.html
 
-build:
-	mkdir build
-	cp download_forecast.py build
-	pip3 install -t build pytz
-	(cd build && zip -9qr - .) > $(FUNCTION).zip
-	rm -r build
+check-account:
+	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
 
-update: build
+check-stream:
+	@[ -n "$(STREAM)" ] || (echo "Try again by passing STREAM to make" && false)
+
+create-function-%: check-account check-stream %.zip support-arn.txt
+	aws lambda create-function \
+		--function-name `echo $* | tr _ -` \
+		--handler $*.handle_event \
+		--runtime python3.9 \
+		--role $(IAM_ROLE) \
+		--environment "Variables={FORECAST_STREAM=$(STREAM)}" \
+		--timeout 900 \
+		--layers `cat support-arn.txt` \
+		--zip-file fileb://$*.zip
+
+update-function-%: %.zip
 	aws lambda update-function-code \
-		--function-name $(FUNCTION) \
-		--zip-file fileb://$(FUNCTION).zip
+		--function-name `echo $* | tr _ -` \
+		--zip-file fileb://$*.zip
+
+delete-function-%:
+	aws lambda delete-function --function-name `echo $* | tr _ -`
+
+%.zip: %.py
+	mkdir build
+	cp $*.py build
+	#pip3 install -t build pytz
+	(cd build && zip -9qr - .) > $*.zip
+	rm -r build
 
 check-launch:
 	python3 download_forecast.py -s
 
-support: build-support install-support configure-support clean
+support: build-support install-support support-arn.txt clean
 
 install-support:
 	aws s3 cp $(FUNCTION)-support.zip s3://$(BUCKET)/layers/$(FUNCTION)-support.zip
@@ -34,14 +57,16 @@ install-support:
 		--layer-name $(FUNCTION)-support \
 		--content S3Bucket=$(BUCKET),S3Key=layers/$(FUNCTION)-support.zip
 
-configure-support:
+configure-support: support-arn.txt
+	aws lambda update-function-configuration \
+		--function-name $(FUNCTION) \
+		--layers `cat support-arn.txt`
+
+support-arn.txt:
 	aws lambda list-layer-versions --layer-name download-forecast-support \
 		--query 'LayerVersions[0].LayerVersionArn' \
 		--output text \
 		> support-arn.txt
-	aws lambda update-function-configuration --function-name $(FUNCTION) \
-		--layers `cat support-arn.txt`
-	rm -f support-arn.txt
 
 clean-support:
 	aws lambda list-layer-versions --layer-name download-forecast-support \
@@ -62,12 +87,12 @@ install-ffmpeg:
 	wget -O- https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | \
 		tar -xf -
 	cp ffmpeg-*-amd64-static/ffmpeg build/bin
-	rm -rf ffmeg-*-amd64-static
+	rm -rf ffmpeg-*-amd64-static
 
 install-vosk:
 	mkdir -p build/python
 	pip install --target build/python \
-		--platform manylinux2010_x86_64 \
+		--platform manylinux2014_x86_64 \
 		--implementation cp \
 		--python 3.9 \
 		--only-binary=:all: \
@@ -80,28 +105,6 @@ install-vosk:
 install-pytz:
 	mkdir -p build/python
 	pip install --target build/python pytz
-
-clean:
-	rm -rf __pycache__ build $(FUNCTION).zip $(FUNCTION)-support.zip support-*.txt
-
-check-account:
-	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
-
-check-stream:
-	@[ -n "$(STREAM)" ] || (echo "Try again by passing STREAM to make" && false)
-
-create-function: check-account check-stream build
-	aws lambda create-function \
-		--function-name $(FUNCTION) \
-		--handler download_forecast.handle_lambda_event \
-		--runtime python3.9 \
-		--role $(IAM_ROLE) \
-		--environment "Variables={FORECAST_STREAM=$(STREAM)}" \
-		--timeout 900 \
-		--zip-file fileb://download-forecast.zip
-
-delete-function:
-	aws lambda delete-function --function-name $(FUNCTION)
 
 create-rule-0048: check-account
 	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 00 48 12
