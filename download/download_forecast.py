@@ -71,7 +71,7 @@ def record_stream(stream, bucket, prefix, duration):
     with tempfile.NamedTemporaryFile() as temp:
         if download_stream(stream, temp, duration):
             upload_file(temp.name, bucket, prefix + filename)
-            return filename
+            return prefix + filename
     return ""
 
 def update_catalog(bucket_name, prefix, catalog_name="catalog.json"):
@@ -117,6 +117,15 @@ def set_next_launch(hour, minute, test_date=None):
     except ClientError as e:
         logging.error(e)
 
+def start_transcription(file):
+    lambda_ = boto3.client('lambda')
+    logging.info(f"Initiating transcription of {file}")
+    lambda_.invoke(
+        FunctionName="transcribe-forecast",
+        InvocationType="Event",
+        Payload=json.dumps({"files": [file]})
+    )
+
 def handle_lambda_event(event, context):
     set_log_level()
     duration = int(event.get("duration", 12*60))
@@ -127,8 +136,10 @@ def handle_lambda_event(event, context):
         return
     config = get_config()
     wait_until(hour, minute)
-    record_stream(config["stream"], config["bucket"], config["prefix"], duration)
-    update_catalog(config["bucket"], config["prefix"])
+    recording = record_stream(config["stream"], config["bucket"], config["prefix"], duration)
+    if recording:
+        start_transcription(recording)
+        update_catalog(config["bucket"], config["prefix"])
     set_next_launch(hour, minute, event.get("test_date"))
 
 if __name__ == "__main__":
