@@ -10,24 +10,20 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-west-2
-
       - name: Deploy Cloudfront distribution
-        - run: pip3 install boto3
-        - run: make index
-
+        run: |
+          pip3 install boto3
+          make index
       - name: Deploy download-forecast
-        - run: make -C download
-
+        run: make -C download
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-
       - name: Deploy transcribe-forecast
-        - run: make -C transcribe update-function
+        run: make -C transcribe update-function
