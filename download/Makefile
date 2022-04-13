@@ -5,13 +5,13 @@ DISTRIBUTION = EXV28HJUVSJZY
 FUNCTION = download-forecast
 LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:$(FUNCTION)"
 
-all: update check-launch index clean
+all: update-function-download_forecast check-launch index clean
 
 clean:
 	rm -rf __pycache__ build *.zip support-*.txt
 
 index:
-	aws s3 sync --acl public-read docs/ s3://$(BUCKET)/
+	aws s3 sync --acl public-read ../docs/ s3://$(BUCKET)/
 	aws cloudfront create-invalidation --distribution-id $(DISTRIBUTION) --paths /index.html
 
 check-account:
@@ -20,7 +20,7 @@ check-account:
 check-stream:
 	@[ -n "$(STREAM)" ] || (echo "Try again by passing STREAM to make" && false)
 
-create-function-%: check-account check-stream %.zip support-arn.txt
+create-function-%: check-account check-stream %.zip
 	aws lambda create-function \
 		--function-name `echo $* | tr _ -` \
 		--handler $*.handle_event \
@@ -72,10 +72,10 @@ create-rule-1754: check-account
 delete-rule-1754: check-account
 	tools/del-rule.sh $(FUNCTION) 17 54
 
-create: create-function \
+create: create-function-download_forecast \
 	create-rule-0048 create-rule-0520 create-rule-1201 create-rule-1754 \
 	build support clean
 
-destroy: delete-function \
+destroy: delete-function-download_forecast \
 	delete-rule-0048 delete-rule-0520 delete-rule-1201 delete-rule-1754 \
 	clean
