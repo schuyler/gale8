@@ -80,6 +80,7 @@ def detect(rec, filename):
 
 def handle_event(event, context):
     set_log_level()
+    logging.info(f"Path={os.getenv('PATH')}")
     config = get_config()
     bucket = config["bucket"]
     s3 = boto3.client("s3")
@@ -87,6 +88,7 @@ def handle_event(event, context):
     logging.info(f"Instantiating speech recognizer")
     model_path = event.get("model", "/opt/model")
     rec = recognizer(model_path)
+    cues = {}
     for mp3_file in event["files"]:
         filename = os.path.join(work_dir.name, os.path.basename(mp3_file))
         logging.info(f"Fetching {mp3_file} from {bucket} to {filename}")
@@ -103,6 +105,8 @@ def handle_event(event, context):
             s3.upload_file(cue_filename, bucket, object_name)
         else:
             logging.info("(not running in production, so not uploading)")
+        cues[mp3_file] = data
+    return cues
 
 if __name__ == "__main__":
     import sys
