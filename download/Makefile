@@ -1,4 +1,5 @@
 REGION := eu-west-2
+ACCOUNT := $(AWS_ACCOUNT)
 IAM_ROLE := arn:aws:iam::$(ACCOUNT):role/gale8-lambda
 FUNCTION = download-forecast
 LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:$(FUNCTION)"
@@ -43,28 +44,28 @@ check-launch:
 	python3 download_forecast.py -s
 
 create-rule-0048: check-account
-	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 00 48 12
+	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 00 48 12
 
 delete-rule-0048: check-account
-	tools/del-rule.sh $(FUNCTION) 00 48
+	./del-rule.sh $(FUNCTION) 00 48
 
 create-rule-0520: check-account
-	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 05 20 12
+	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 05 20 12
 
 delete-rule-0520: check-account
-	tools/del-rule.sh $(FUNCTION) 05 20
+	./del-rule.sh $(FUNCTION) 05 20
 
 create-rule-1201: check-account
-	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 12 01 7
+	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 12 01 7
 
 delete-rule-1201: check-account
-	tools/del-rule.sh $(FUNCTION) 12 01
+	./del-rule.sh $(FUNCTION) 12 01
 
 create-rule-1754: check-account
-	tools/gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 17 54 7
+	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 17 54 7
 
 delete-rule-1754: check-account
-	tools/del-rule.sh $(FUNCTION) 17 54
+	./del-rule.sh $(FUNCTION) 17 54
 
 create: create-function-download_forecast \
 	create-rule-0048 create-rule-0520 create-rule-1201 create-rule-1754 \
