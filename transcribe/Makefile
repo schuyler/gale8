@@ -6,9 +6,7 @@ ECR=$(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
 IMAGE_URI=$(ECR)/$(IMAGE):latest
 
 build:
-	cp ../transcribe_forecast.py .
 	docker build . -t $(IMAGE)
-	rm transcribe_forecast.py
 
 run: build
 	docker run -p 9000:8080 --env-file .env --rm $(IMAGE)
