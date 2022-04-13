@@ -18,7 +18,7 @@ jobs:
           aws-region: eu-west-2
       - name: Deploy Cloudfront distribution
         run: |
-          pip3 install boto3
+          pip3 install -r download/requirements.txt
           make index
       - name: Deploy download-forecast
         run: make -C download
