@@ -38,7 +38,7 @@ create-function: upload
 
 update-function: upload
 	aws lambda update-function-code \
-		--function-name $(FUNCTION)
+		--function-name $(FUNCTION) \
 		--image-uri $(IMAGE_URI)
 
 clean:
