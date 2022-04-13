@@ -23,7 +23,7 @@ create-repo:
 	aws ecr create-repository --repository-name $(IMAGE) \
 		--image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
 
-upload: build login
+upload: build
 	docker tag $(IMAGE):latest $(IMAGE_URI)
 	docker push $(IMAGE_URI)
 

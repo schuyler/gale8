@@ -27,3 +27,5 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
       - name: Deploy transcribe-forecast
         run: make -C transcribe update-function
+        env:
+          AWS_ACCOUNT: ${{ secrets.AWS_ACCOUNT }}
