@@ -1,7 +1,7 @@
 BUCKET = gale8-uk
 DISTRIBUTION = EXV28HJUVSJZY
 
-all: index download-forecast
+all: index catalog-forecast transcribe-forecast download-forecast
 
 index: 
 	aws s3 sync --acl public-read docs/ s3://$(BUCKET)/
@@ -9,3 +9,9 @@ index:
 
 download-forecast:
 	make -C download
+
+transcribe-forecast:
+	make -C transcribe
+
+catalog-forecast:
+	make -C catalog
