@@ -17,7 +17,7 @@ cat >tmp.json <<EOF
     {
         "Id": "1",
         "Arn": "arn:aws:lambda:${REGION}:${ACCOUNT}:function:${FUNCTION}",
-        "Input": "{\"time\": \"${HOUR}:${MIN}\", \"duration\": $((${DURATION} * 60))}",
+        "Input": "{\"time\": \"${HOUR}:${MIN}\", \"duration\": $((${DURATION} * 60)), \"stream\": \"${FORECAST_STREAM}\"}",
         "RetryPolicy": {
             "MaximumEventAgeInSeconds": 60
         }

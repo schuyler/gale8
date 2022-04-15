@@ -135,11 +135,13 @@ def handle_lambda_event(event, context):
         logging.error(e)
         return
     config = get_config()
+    stream = event.get("stream", config["stream"])
+    bucket, prefix = config["bucket"], config["prefix"]
     wait_until(hour, minute)
-    recording = record_stream(config["stream"], config["bucket"], config["prefix"], duration)
+    recording = record_stream(stream, bucket, prefix, duration)
     if recording:
         start_transcription(recording)
-        update_catalog(config["bucket"], config["prefix"])
+        update_catalog(bucket, prefix)
     set_next_launch(hour, minute, event.get("test_date"))
 
 if __name__ == "__main__":
