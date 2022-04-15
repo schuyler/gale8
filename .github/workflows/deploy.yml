@@ -11,6 +11,7 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
+        run: pip3 install boto3
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -18,9 +19,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-west-2
       - name: Deploy Cloudfront distribution
-        run: |
-          pip3 install -r download/requirements.txt
-          make index
+        run: make index
   deploy-download:
     runs-on: ubuntu-latest
     environment: eu-west-2
@@ -28,6 +27,8 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
+      - name: Install boto3
+        run: pip3 install boto3
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
