@@ -4,9 +4,10 @@ on:
     branches:
       - main
 jobs:
-  deploy:
+  deploy-site:
     runs-on: ubuntu-latest
     environment: eu-west-2
+    timeout-minutes: 1
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -20,8 +21,34 @@ jobs:
         run: |
           pip3 install -r download/requirements.txt
           make index
+  deploy-download:
+    runs-on: ubuntu-latest
+    environment: eu-west-2
+    timeout-minutes: 1
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
       - name: Deploy download-forecast
         run: make -C download
+  deploy-transcribe:
+    runs-on: ubuntu-latest
+    environment: eu-west-2
+    timeout-minutes: 2
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
