@@ -100,9 +100,9 @@ def handle_event(event, context):
         with open(cue_filename, "w") as cue_file:
            json.dump(data, cue_file)
         object_name = config["prefix"] + "/" + os.path.basename(cue_filename)
-        logging.info(f"Uploading {cue_filename} to {bucket}")
+        logging.info(f"Uploading {cue_filename} to s3://{bucket}/{object_name}")
         if in_production():
-            s3.upload_file(cue_filename, bucket, object_name)
+            s3.upload_file(cue_filename, bucket, object_name, ExtraArgs={'ACL': 'public-read'})
         else:
             logging.info("(not running in production, so not uploading)")
         cues[mp3_file] = data
