@@ -74,28 +74,6 @@ def record_stream(stream, bucket, prefix, duration):
             return prefix + filename
     return ""
 
-def update_catalog(bucket_name, prefix, catalog_name="catalog.json"):
-    session = boto3.Session()
-    s3 = session.resource('s3')
-    bucket = s3.Bucket(bucket_name)
-
-    filename = re.compile(f'.*{prefix}(....)(..)(..)Z(....).mp3$')
-    catalog = {}
-
-    for obj in bucket.objects.all():
-        m = filename.match(obj.key)
-        if not m: continue
-        year, month, day, timing = m.groups()
-        catalog.setdefault(year, {}) \
-               .setdefault(month, {}) \
-               .setdefault(day, []) \
-               .append(timing)
-
-    with tempfile.NamedTemporaryFile(mode="w") as temp:
-        json.dump(catalog, temp)
-        temp.flush() # make sure the entire JSON stream is flushed to disk
-        upload_file(temp.name, bucket_name, prefix + catalog_name)
-
 def set_next_launch(hour, minute, test_date=None):
     now = test_date or local_now()
     tomorrow = now + timedelta(days=1)
@@ -141,7 +119,6 @@ def handle_lambda_event(event, context):
     recording = record_stream(stream, bucket, prefix, duration)
     if recording:
         start_transcription(recording)
-        update_catalog(bucket, prefix)
     set_next_launch(hour, minute, event.get("test_date"))
 
 if __name__ == "__main__":

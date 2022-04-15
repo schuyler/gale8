@@ -78,6 +78,15 @@ def detect(rec, filename):
         "length": round(bytes_read / float(bytes_per_sample), 3)
     }
 
+def start_catalog(file, event):
+    lambda_ = boto3.client('lambda')
+    logging.info(f"Initiating catalog of {file}")
+    lambda_.invoke(
+        FunctionName="catalog-forecast",
+        InvocationType="Event",
+        Payload=json.dumps(event)
+    )
+
 def handle_event(event, context):
     set_log_level()
     logging.info(f"Path={os.getenv('PATH')}")
@@ -103,6 +112,7 @@ def handle_event(event, context):
         logging.info(f"Uploading {cue_filename} to s3://{bucket}/{object_name}")
         if in_production():
             s3.upload_file(cue_filename, bucket, object_name, ExtraArgs={'ACL': 'public-read'})
+            start_catalog(mp3_file, data) # probably not a race condition?
         else:
             logging.info("(not running in production, so not uploading)")
         cues[mp3_file] = data
