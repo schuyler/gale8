@@ -6,7 +6,6 @@ def get_config():
     return {
         "bucket": "gale8-uk",
         "cue_prefix": "cues/",
-        "stream_prefix": "archive/",
         "catalog": "archive/catalog.json",
         "broadcast_times": ["0048", "0520", "1201", "1754"]
     }
@@ -63,8 +62,7 @@ def handle_event(event, context):
         logging.info(f"Can't identify start time of broadcast from cues; skipping catalog")
         return
 
-    prefix = config["stream_prefix"]
-    m = re.match(f'.*{prefix}(....)(..)(..)Z(....).mp3$', file)
+    m = re.match(r'.*\b(....)(..)(..)Z(....).mp3$', file)
     if not m:
         logging.error(f"File {file} doesn't match naming format")
         return
