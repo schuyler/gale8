@@ -1,5 +1,5 @@
-import time, os, logging, io, json, re
-import boto3, pytz
+import os, logging, io, json, re
+import boto3
 from botocore.exceptions import ClientError
 
 def get_config():
