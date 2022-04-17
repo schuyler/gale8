@@ -101,6 +101,7 @@ let sleepTimer;
 let player;
 let catalog;
 let currentFile;
+let isLoading;
 
 let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -145,14 +146,16 @@ function hidePlayButton() {
 }
 
 function startPlayback() {
-    console.log("startPlayback");
+    // console.log("startPlayback");
     player.play()
         .then(function() {
+            isLoading = false;
             hidePlayButton();
             updateNowPlaying();
             updateTimeLeft();
         })
         .catch(function(error) {
+            isLoading = false;
             if (error.name == "NotAllowedError") {
                 console.log("Media playback not permitted yet:", error);
                 flashPlayButton(3);
@@ -193,6 +196,7 @@ function updateTimeLeft() {
     let remaining = currentFile.end - player.currentTime;
     if (remaining <= 0) {
         playNextFile();
+        return;
     }
     let mins = zeroPad(Math.floor(remaining / 60));
     let secs = zeroPad(Math.floor(remaining % 60));
@@ -209,6 +213,10 @@ function resetSleepTimer() {
 
 function loadCues(file) {
     let url = cueUrl + file + ".json";
+    if (isLoading) {
+        return;
+    }
+    isLoading = true;
     console.log("loadCues", url);
     fetch(url)
         .then(res => res.json())
@@ -221,7 +229,7 @@ function readCues(file, data) {
     // {"cues": {"keyword": [secs1, secs2], "keyword2": ...}, "length": secs}
     const startBoundary = 2 * 60; // assume the forecast starts in the first 3 min of the recording
     let duration = data.length;
-    let endBoundary = duration / 2;
+    let endBoundary = duration / 2; // assume the forecast ends in the second half of the recording... somewhere.
     let cues = data.cues;
     // Find the last mention of the word "shipping" in the first half of the broadcast, because that's probably when the actual forecast starts.
     let start = cues.shipping?.filter(t => t < startBoundary).sort().reverse()[0];
@@ -239,7 +247,7 @@ function readCues(file, data) {
     }
     // Find the last mention of "shipping" or "bbc" or "radio"
     let end;
-    for (key of ["shipping", "bbc", "radio"]) {
+    for (key of ["shipping", "bulletin", "bbc", "radio"]) {
         if (!cues[key]) continue;
         end = cues[key].filter(t => t > endBoundary).sort()[0];
         if (end) break;
@@ -354,13 +362,9 @@ function getRandomBroadcast() {
 
 function init() {
     player = getPlayer();
-    player.addEventListener('ended', function() {
-        playNextFile();
-    });
     player.addEventListener('timeupdate', function(e) {
         updateTimeLeft();
     });
-
     fetch("archive/catalog.json")
         .then(res => res.json())
         .then(data => loadCatalog(data))
