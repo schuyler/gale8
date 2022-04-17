@@ -95,7 +95,7 @@ def handle_event(event, context):
     s3 = boto3.client("s3")
     work_dir = tempfile.TemporaryDirectory()
     logging.info(f"Instantiating speech recognizer")
-    model_path = context.get("model", "/opt/model")
+    model_path = event.get("model", "/opt/model")
     rec = recognizer(model_path)
     cues = {}
     for mp3_file in event["files"]:
@@ -112,22 +112,19 @@ def handle_event(event, context):
         logging.info(f"Uploading {cue_filename} to s3://{bucket}/{object_name}")
         if in_production():
             s3.upload_file(cue_filename, bucket, object_name, ExtraArgs={'ACL': 'public-read'})
-            if not context.get("skip_catalog"):
+            if not event.get("skip_catalog"):
                 start_catalog(mp3_file, data) # probably not a race condition?
         else:
             logging.info("(not running in production, so not uploading)")
         cues[mp3_file] = data
     return cues
 
-def handle_s3_event(event, context):
+def handle_batch_event(event, context):
     set_log_level()
     config = get_config()
     invocation_id = event['invocationId']
     invocation_schema_version = event['invocationSchemaVersion']
     results = []
-
-    context = context.copy()
-    context["skip_catalog"] = True
 
     for task in event['tasks']:
         task_id = task['taskId']
@@ -138,7 +135,7 @@ def handle_s3_event(event, context):
             obj_key = parse.unquote(task['s3Key'], encoding='utf-8')
             # bucket_name = task['s3BucketArn'].split(':')[-1]
             logging.info("Got task: transcribe %s", obj_key)
-            output = handle_event({"files": [obj_key]}, context)
+            output = handle_event({"files": [obj_key], "skip_catalog": True}, context)
             cues = output[obj_key]["cues"]
             length = output[obj_key]["length"]
             timings = cues.get("shipping", []) + cues.get("forecast", []) + [length]
@@ -165,11 +162,12 @@ def handle_s3_event(event, context):
 if __name__ == "__main__":
     import sys
     if sys.argv[1] == "-s":
-        result = handle_s3_event({
+        result = handle_batch_event({
             "invocationId": "test-run",
             "invocationSchemaVersion": "0.01",
-            "tasks": [{ "taskId": "1", "s3Key": sys.argv[2] }]
-            }, {"model": "../detection/model"})
+            "tasks": [{ "taskId": "1", "s3Key": sys.argv[2] }],
+            "model": "../detection/model"
+            }, {})
         print(result)
     else:
-        handle_event({"files": sys.argv[1:]}, {"model": "../detection/model"})
+        handle_event({"files": sys.argv[1:], "model": "../detection/model"})
