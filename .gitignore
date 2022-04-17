@@ -7,4 +7,5 @@ build/
 batch/
 audio/
 */.vscode/
+venv
 __pycache__
