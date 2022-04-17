@@ -121,13 +121,6 @@ function getDateFromFile(currentFile) {
         file.substring(11, 13), 0);
 }
 
-function getFileFromDate(date, broadcast) {
-    return date.getFullYear() +
-         zeroPad(date.getMonth() + 1) +
-         zeroPad(date.getDate()) +
-         "Z" + broadcastTimes[broadcast || 0] + ".mp3";
-}
-
 function getLondonTime(when) {
     let date = when.toLocaleString("sv-SE", {timeZone: "Europe/London"});
     let yr  = date.substr(0, 4);
@@ -168,32 +161,6 @@ function getRandomBroadcastFile() {
     let origin = new Date("2017-12-24").valueOf();
     let when = new Date(Math.random() * (Date.now() - origin) + origin);
     return getBroadcastFile(when);
-}
-
-function getBroadcast(date) {
-    return broadcastTimes.indexOf(
-        zeroPad(date.getHours()) +
-        zeroPad(date.getMinutes()));
-}
-
-function getNextFile(currentFile, setBroadcast) {
-    let date = getDateFromFile(currentFile);
-    let broadcast = getBroadcast(date);
-
-    if (broadcast > 0) {
-        broadcast -= 1;
-    } else {
-        broadcast = broadcastTimes.length - 1;
-        date = new Date(date - 24 * 60 * 60 * 1000);
-    }
-
-    if (setBroadcast !== undefined) {
-        broadcast = setBroadcast;
-    }
-
-    nextFile = getFileFromDate(date);
-    console.log("getNextFile", nextFile);
-    return archiveUrl + nextFile;
 }
 
 function formatFileDate(currentFile) {
@@ -312,8 +279,10 @@ function readCues(file, data) {
 
 function playFile(cue) {
     let {file, start, end} = cue;
+    const fadeIn = 5;
     player.src = archiveUrl + file;
-    player.currentTime = start;
+    // If the broadcast start is shorter than the fade in, just start at zero.
+    player.currentTime = (start > fadeIn ? start - fadeIn : 0);
     $("#fileTime").html("Loading...");
     startPlayback();
     //player.load();
