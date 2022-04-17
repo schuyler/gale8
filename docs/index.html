@@ -214,39 +214,48 @@ function updateNowPlaying() {
     $("#fileTime").html(formatFileDate(player.src));
 }
 
+function showPlayButton() {
+    $("#playButton")[0].style.visibility = "visible";
+}
+
+function hidePlayButton() {
+    $("#playButton")[0].style.visibility = "hidden";
+}
+
+function startPlayback() {
+    console.log("startPlayback");
+    player.play()
+        .then(function() {
+            hidePlayButton();
+            updateNowPlaying();
+            updateTimeLeft();
+        })
+        .catch(function(error) {
+            if (error.name == "NotAllowedError") {
+                console.log("Media playback not permitted yet:", error);
+                flashPlayButton(3);
+            } else {
+                console.log("Missing media file:", error);
+                setTimeout(function() { playNextFile() }, 500);
+            }
+        });
+}
+
+function pausePlayback() {
+    showPlayButton();
+    player.pause();
+}
+
 function togglePlayback() {
     if (player.paused) {
-        isLoading = true;
-        player.play()
-            .then(function() {
-                isLoading = false;
-                updateNowPlaying();
-                updateTimeLeft();
-            })
-            .catch(function(error) {
-                if (error.name == "NotAllowedError") {
-                    console.log("Media playback not permitted yet:", error);
-                    flashPlayButton(3);
-                } else {
-                    console.log("Missing media file:", error);
-                    setTimeout(function() { playNextFile() }, 500);
-                }
-            });
+        startPlayback();
     } else {
-        player.pause();
+        pausePlayback();
     }
 }
 
-function playFile(url) {
-    player.src = archiveUrl + url;
-    $("#fileTime").html("Loading...");
-    //player.load();
-}
-
 function playNextFile(setBroadcast) {
-    //playFile(getNextFile(player.src, setBroadcast));
-    playFile(getRandomBroadcastFile());
-    togglePlayback();
+    loadCues(getRandomBroadcastFile());
 }
 
 function skipAhead(secs) {
@@ -273,7 +282,41 @@ function resetSleepTimer() {
 }
 
 function loadCues(file) {
+    let url = cueUrl + file + ".json";
+    console.log("loadCues", url);
+    fetch(url)
+        .then(res => res.json())
+        .then(data => readCues(file, data))
+        .then(cue => playFile(cue))
+        .catch(err => console.log("loadCues failed:", err));
+}
 
+function readCues(file, data) {
+    // {"cues": {"keyword": [secs1, secs2], "keyword2": ...}, "length": secs}
+    let duration = data.length;
+    let cues = data.cues;
+    // Find the last mention of the word "shipping" in the first half of the broadcast, because that's probably when the actual forecast starts.
+    let start = cues.shipping?.filter(t => t < duration / 2)[-1]
+    // Fallback: then pick the first time the word "forecast"
+    if (!start && cues.forecast) {
+        start = cues.forecast[0]
+    }
+    // Doublecheck: Is the start time in the first half of the broadcast? If not, fall back to the beginning of the recording.
+    if (!start || start > duration / 2) {
+        start = 0;
+    }
+    // Find the last mention of "shipping" or "forecast" or, as a fallback, select the end of the recording.
+    let end = cues.shipping ? cues.shipping[-1] : (cues.forecast ? cues.forecast[-1] : duration);
+    return {file: file, start: start, end: end}
+}
+
+function playFile(cue) {
+    let {file, start, end} = cue;
+    player.src = archiveUrl + file;
+    player.currentTime = start;
+    $("#fileTime").html("Loading...");
+    startPlayback();
+    //player.load();
 }
 
 function loadCatalog(data) {
@@ -339,31 +382,22 @@ function broadcastSelected() {
 
     let url = [yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
     console.log("broadcastSelected", url);
-    playFile(url);
-    if (player.paused) togglePlayback();
+    loadCues(url);
 } 
 
 function init() {
     player = getPlayer();
-    player.addEventListener('play', function() {
-        $("#playButton")[0].style.visibility = "hidden";
-    });
-    player.addEventListener('pause', function() {
-        if (!isLoading) {
-          $("#playButton")[0].style.visibility = "visible";
-        }
-    });
     player.addEventListener('ended', function() {
         playNextFile();
     });
     player.addEventListener('timeupdate', function(e) {
         updateTimeLeft();
     });
-    playFile(getBroadcastFile());
 
     fetch("archive/catalog.json")
         .then(res => res.json())
-        .then(data => loadCatalog(data));
+        .then(data => loadCatalog(data))
+        .then(() => loadCues(getBroadcastFile()));
 
     $("#broadcastYear").change(yearSelected);
     $("#broadcastMonth").change(monthSelected);
