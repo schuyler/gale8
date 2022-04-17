@@ -93,8 +93,9 @@
 <script>
 
 let broadcastTimes = [ "0048", "0520", "1201", "1754" ];
-let baseUrl = "https://gale8.net/archive/";
-//let baseUrl = "http://gale8-uk.s3-website.eu-west-2.amazonaws.com/archive/";
+let baseUrl = "https://gale8.net/";
+let archiveUrl = baseUrl + "archive/";
+let cueUrl = baseUrl + "cues/";
 let isLoading;
 let sleepTimer;
 let player;
@@ -111,7 +112,7 @@ function parseDecimal(n) {
 }
 
 function getDateFromFile(currentFile) {
-    let file = currentFile.substring(baseUrl.length, currentFile.length-4);
+    let file = currentFile.substring(archiveUrl.length, currentFile.length-4);
     return new Date(
         file.substring(0, 4),
         file.substring(4, 6) - 1,
@@ -158,7 +159,7 @@ function getBroadcastFile(when) {
     let mo = zeroPad(londonTime[1]);
     let day = zeroPad(londonTime[2]);
     
-    url = [baseUrl, yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
+    url = [yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
     console.log("getBroadcastFile", url);
     return url;
 }
@@ -192,7 +193,7 @@ function getNextFile(currentFile, setBroadcast) {
 
     nextFile = getFileFromDate(date);
     console.log("getNextFile", nextFile);
-    return baseUrl + nextFile;
+    return archiveUrl + nextFile;
 }
 
 function formatFileDate(currentFile) {
@@ -237,7 +238,7 @@ function togglePlayback() {
 }
 
 function playFile(url) {
-    player.src = url;
+    player.src = archiveUrl + url;
     $("#fileTime").html("Loading...");
     //player.load();
 }
@@ -303,7 +304,6 @@ function yearSelected() {
 function monthSelected() {
     let year = $("#broadcastYear option:selected").val();
     let month = $("#broadcastMonth option:selected").val();
-    console.log("monthSelected", year, month);
     let days = Object.keys(catalog[year][month]).sort();
     $('#broadcastDay option:not(:first-child)').remove();
     $('#broadcastTime option:not(:first-child)').remove();
@@ -337,7 +337,7 @@ function broadcastSelected() {
 
     if (!yr || !mo || !day || !broadcastTime) return;
 
-    let url = [baseUrl, yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
+    let url = [yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
     console.log("broadcastSelected", url);
     playFile(url);
     if (player.paused) togglePlayback();
