@@ -92,13 +92,15 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script>
 
-let broadcastTimes = [ "0048", "0520", "1201", "1754" ];
-let baseUrl = "https://gale8.net/";
-let archiveUrl = baseUrl + "archive/";
-let cueUrl = baseUrl + "cues/";
+const broadcastTimes = [ "0048", "0520", "1201", "1754" ];
+const baseUrl = "https://gale8.net/";
+const archiveUrl = baseUrl + "archive/";
+const cueUrl = baseUrl + "cues/";
+const audioFade = 5;
 let sleepTimer;
 let player;
 let catalog;
+let currentFile;
 
 let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -174,12 +176,13 @@ function togglePlayback() {
     }
 }
 
-function playNextFile(setBroadcast) {
+function playNextFile() {
+    // FIXME: Race condition: what if loadCues() is still loading cues
     loadCues(getRandomBroadcast());
 }
 
 function skipAhead(secs) {
-    if (player.duration - player.currentTime > secs) {
+    if (currentFile.end - player.currentTime > secs) {
         player.currentTime += secs;
     } else {
         playNextFile();
@@ -187,7 +190,10 @@ function skipAhead(secs) {
 }
 
 function updateTimeLeft() {
-    let remaining = player.duration - player.currentTime;
+    let remaining = currentFile.end - player.currentTime;
+    if (remaining <= 0) {
+        playNextFile();
+    }
     let mins = zeroPad(Math.floor(remaining / 60));
     let secs = zeroPad(Math.floor(remaining % 60));
     $("#timeLeft").html(isNaN(remaining) ? "--:--" : (mins + ":" + secs));
@@ -213,31 +219,48 @@ function loadCues(file) {
 
 function readCues(file, data) {
     // {"cues": {"keyword": [secs1, secs2], "keyword2": ...}, "length": secs}
+    const startBoundary = 2 * 60; // assume the forecast starts in the first 3 min of the recording
     let duration = data.length;
+    let endBoundary = duration / 2;
     let cues = data.cues;
     // Find the last mention of the word "shipping" in the first half of the broadcast, because that's probably when the actual forecast starts.
-    let start = cues.shipping?.filter(t => t < duration / 2).reverse()[0]
+    let start = cues.shipping?.filter(t => t < startBoundary).sort().reverse()[0];
     // Fallback: then pick the first time the word "forecast"
-    if (!start && cues.forecast) {
-        start = cues.forecast[0]
+    if (!start) {
+        start = cues.forecast?.filter(t => t < startBoundary).sort()[0];
     }
-    // Doublecheck: Is the start time in the first half of the broadcast? If not, fall back to the beginning of the recording.
-    if (!start || start > duration / 2) {
+    // Doublecheck: Is the start time before the boundary? If not, fall back to the beginning of the recording.
+    if (!start || start > startBoundary) {
         start = 0;
     }
-    // Find the last mention of "shipping" or "forecast" or, as a fallback, select the end of the recording.
-    let end = cues.shipping ? cues.shipping[cues.shipping.length - 1] : 
-             (cues.forecast ? cues.forecast[cues.forecast.length - 1] : duration);
+    // Add <audioFade> seconds of fade in at the beginning, if there's time
+    if (start > audioFade) {
+        start -= audioFade;
+    }
+    // Find the last mention of "shipping" or "bbc" or "radio"
+    let end;
+    for (key of ["shipping", "bbc", "radio"]) {
+        if (!cues[key]) continue;
+        end = cues[key].filter(t => t > endBoundary).sort()[0];
+        if (end) break;
+    }
+    // Doublecheck: Is the end in the last half of the broadcast? If not, fallback to the end.
+    if (!end || end < startBoundary) {
+        end = duration;
+    }
+    // Add <audioFade> seconds of fade out at the end, if there's time.
+    if (end + audioFade < duration) {
+        end += audioFade;
+    }
     return {file: file, start: start, end: end}
 }
 
 function playFile(cue) {
     let {file, start, end} = cue;
-    const fadeIn = 5;
     player.src = archiveUrl + file;
-    // If the broadcast start is shorter than the fade in, just start at zero.
-    player.currentTime = (start > fadeIn ? start - fadeIn : 0);
+    player.currentTime = start;
     $("#fileTime").html("Loading...");
+    currentFile = cue;
     startPlayback();
     //player.load();
 }
