@@ -96,7 +96,6 @@ let broadcastTimes = [ "0048", "0520", "1201", "1754" ];
 let baseUrl = "https://gale8.net/";
 let archiveUrl = baseUrl + "archive/";
 let cueUrl = baseUrl + "cues/";
-let isLoading;
 let sleepTimer;
 let player;
 let catalog;
@@ -107,8 +106,8 @@ function zeroPad(n) {
     return (n < 10 ? "0" : "") + n;
 }
 
-function parseDecimal(n) {
-    return parseInt(n, 10);
+function getPlayer() {
+    return $("#player")[0];
 }
 
 function getDateFromFile(currentFile) {
@@ -121,55 +120,9 @@ function getDateFromFile(currentFile) {
         file.substring(11, 13), 0);
 }
 
-function getLondonTime(when) {
-    let date = when.toLocaleString("sv-SE", {timeZone: "Europe/London"});
-    let yr  = date.substr(0, 4);
-    let mo  = date.substr(5, 2);
-    let day = date.substr(8, 2);
-    let hr  = date.substr(11, 2);
-    let min = date.substr(14, 2);
-    let xs = [yr, mo, day, hr, min];
-    return xs.map(parseDecimal);
-}
-
-function getBroadcastFile(when) {
-    if (when === undefined) {
-        when = new Date();
-    }
-    let londonTime = getLondonTime(when);
-    let hr = londonTime[3];
-    let min = londonTime[4];
-
-    let broadcastTime = broadcastTimes[0]; // always the 0048 for now
-    let broadcastHr = broadcastTime.substr(0, 2);
-    let broadcastMin = broadcastTime.substr(2, 2);
-
-    if (hr < broadcastHr || (hr == broadcastHr && min < broadcastMin + 12)) {
-        londonTime = getLondonTime(new Date(when.valueOf() - 86400000)); // previous midnight
-    }
-    
-    let yr = londonTime[0].toString();
-    let mo = zeroPad(londonTime[1]);
-    let day = zeroPad(londonTime[2]);
-    
-    url = [yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
-    console.log("getBroadcastFile", url);
-    return url;
-}
-
-function getRandomBroadcastFile() {
-    let origin = new Date("2017-12-24").valueOf();
-    let when = new Date(Math.random() * (Date.now() - origin) + origin);
-    return getBroadcastFile(when);
-}
-
 function formatFileDate(currentFile) {
     let date = getDateFromFile(currentFile);
     return date.toString().substring(0, 21); // e.g. "Wed Jul 28 1993 14:39"
-}
-
-function getPlayer() {
-    return $("#player")[0];
 }
 
 function flashPlayButton(n) {
@@ -222,7 +175,7 @@ function togglePlayback() {
 }
 
 function playNextFile(setBroadcast) {
-    loadCues(getRandomBroadcastFile());
+    loadCues(getRandomBroadcast());
 }
 
 function skipAhead(secs) {
@@ -263,7 +216,7 @@ function readCues(file, data) {
     let duration = data.length;
     let cues = data.cues;
     // Find the last mention of the word "shipping" in the first half of the broadcast, because that's probably when the actual forecast starts.
-    let start = cues.shipping?.filter(t => t < duration / 2)[-1]
+    let start = cues.shipping?.filter(t => t < duration / 2).reverse()[0]
     // Fallback: then pick the first time the word "forecast"
     if (!start && cues.forecast) {
         start = cues.forecast[0]
@@ -273,7 +226,8 @@ function readCues(file, data) {
         start = 0;
     }
     // Find the last mention of "shipping" or "forecast" or, as a fallback, select the end of the recording.
-    let end = cues.shipping ? cues.shipping[-1] : (cues.forecast ? cues.forecast[-1] : duration);
+    let end = cues.shipping ? cues.shipping[cues.shipping.length - 1] : 
+             (cues.forecast ? cues.forecast[cues.forecast.length - 1] : duration);
     return {file: file, start: start, end: end}
 }
 
@@ -354,6 +308,27 @@ function broadcastSelected() {
     loadCues(url);
 } 
 
+function getLastBroadcast() {
+    const lastKey = (obj) => Object.keys(obj).sort().reverse()[0];
+    let yr = lastKey(catalog);
+    let mo = lastKey(catalog[yr]);
+    let day = lastKey(catalog[yr][mo]);
+    // actually, always make the first thing that plays the midnight broadcast
+    // let time = lastKey(catalog[yr][mo][day]);
+    let timing = "0048"; 
+    return [yr, mo, day, "Z", timing, ".mp3"].join("");
+}
+
+function getRandomBroadcast() {
+    const randomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const randomKey = (obj) => randomItem(Object.keys(obj));
+    let yr = randomKey(catalog);
+    let mo = randomKey(catalog[yr]);
+    let day = randomKey(catalog[yr][mo]);
+    let timing = randomItem(catalog[yr][mo][day]);
+    return [yr, mo, day, "Z", timing, ".mp3"].join("");
+}
+
 function init() {
     player = getPlayer();
     player.addEventListener('ended', function() {
@@ -366,7 +341,7 @@ function init() {
     fetch("archive/catalog.json")
         .then(res => res.json())
         .then(data => loadCatalog(data))
-        .then(() => loadCues(getBroadcastFile()));
+        .then(() => loadCues(getLastBroadcast()));
 
     $("#broadcastYear").change(yearSelected);
     $("#broadcastMonth").change(monthSelected);
@@ -401,7 +376,7 @@ $(document).ready(init);
             <a href="#" title="Skip 30s" onClick="skipAhead(30); resetSleepTimer()"><span class="emoji">⏩</span></a>
         </span>
         <span class="shaded">
-          <a href="#" title="Next broadcast" onClick="if (!isLoading) playNextFile(); resetSleepTimer()"><span class="emoji">⏭  </span></a>
+          <a href="#" title="Next broadcast" onClick="playNextFile(); resetSleepTimer()"><span class="emoji">⏭  </span></a>
         </span>
     </div>
     <div id="explanation">
