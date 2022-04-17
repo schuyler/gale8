@@ -2,9 +2,9 @@
 *.mp3
 docs/archive/catalog.json
 .env
-build
 detection/model
-.env
-build
-detection/model
+build/
+batch/
+audio/
+*/.vscode/
 __pycache__
