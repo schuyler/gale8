@@ -92,15 +92,15 @@
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script>
 
-var broadcastTimes = [ "0048", "0520", "1201", "1754" ];
-var baseUrl = "https://gale8.net/archive/";
-//var baseUrl = "http://gale8-uk.s3-website.eu-west-2.amazonaws.com/archive/";
-var isLoading;
-var sleepTimer;
-var player;
-var catalog;
+let broadcastTimes = [ "0048", "0520", "1201", "1754" ];
+let baseUrl = "https://gale8.net/archive/";
+//let baseUrl = "http://gale8-uk.s3-website.eu-west-2.amazonaws.com/archive/";
+let isLoading;
+let sleepTimer;
+let player;
+let catalog;
 
-var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function zeroPad(n) {
     return (n < 10 ? "0" : "") + n;
@@ -111,7 +111,7 @@ function parseDecimal(n) {
 }
 
 function getDateFromFile(currentFile) {
-    var file = currentFile.substring(baseUrl.length, currentFile.length-4);
+    let file = currentFile.substring(baseUrl.length, currentFile.length-4);
     return new Date(
         file.substring(0, 4),
         file.substring(4, 6) - 1,
@@ -128,13 +128,13 @@ function getFileFromDate(date, broadcast) {
 }
 
 function getLondonTime(when) {
-    var date = when.toLocaleString("sv-SE", {timeZone: "Europe/London"});
-    var yr  = date.substr(0, 4);
-    var mo  = date.substr(5, 2);
-    var day = date.substr(8, 2);
-    var hr  = date.substr(11, 2);
-    var min = date.substr(14, 2);
-    var xs = [yr, mo, day, hr, min];
+    let date = when.toLocaleString("sv-SE", {timeZone: "Europe/London"});
+    let yr  = date.substr(0, 4);
+    let mo  = date.substr(5, 2);
+    let day = date.substr(8, 2);
+    let hr  = date.substr(11, 2);
+    let min = date.substr(14, 2);
+    let xs = [yr, mo, day, hr, min];
     return xs.map(parseDecimal);
 }
 
@@ -142,21 +142,21 @@ function getBroadcastFile(when) {
     if (when === undefined) {
         when = new Date();
     }
-    var londonTime = getLondonTime(when);
-    var hr = londonTime[3];
-    var min = londonTime[4];
+    let londonTime = getLondonTime(when);
+    let hr = londonTime[3];
+    let min = londonTime[4];
 
-    var broadcastTime = broadcastTimes[0]; // always the 0048 for now
-    var broadcastHr = broadcastTime.substr(0, 2);
-    var broadcastMin = broadcastTime.substr(2, 2);
+    let broadcastTime = broadcastTimes[0]; // always the 0048 for now
+    let broadcastHr = broadcastTime.substr(0, 2);
+    let broadcastMin = broadcastTime.substr(2, 2);
 
     if (hr < broadcastHr || (hr == broadcastHr && min < broadcastMin + 12)) {
         londonTime = getLondonTime(new Date(when.valueOf() - 86400000)); // previous midnight
     }
     
-    var yr = londonTime[0].toString();
-    var mo = zeroPad(londonTime[1]);
-    var day = zeroPad(londonTime[2]);
+    let yr = londonTime[0].toString();
+    let mo = zeroPad(londonTime[1]);
+    let day = zeroPad(londonTime[2]);
     
     url = [baseUrl, yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
     console.log("getBroadcastFile", url);
@@ -164,8 +164,8 @@ function getBroadcastFile(when) {
 }
 
 function getRandomBroadcastFile() {
-    var origin = new Date("2017-12-24").valueOf();
-    var when = new Date(Math.random() * (Date.now() - origin) + origin);
+    let origin = new Date("2017-12-24").valueOf();
+    let when = new Date(Math.random() * (Date.now() - origin) + origin);
     return getBroadcastFile(when);
 }
 
@@ -176,8 +176,8 @@ function getBroadcast(date) {
 }
 
 function getNextFile(currentFile, setBroadcast) {
-    var date = getDateFromFile(currentFile);
-    var broadcast = getBroadcast(date);
+    let date = getDateFromFile(currentFile);
+    let broadcast = getBroadcast(date);
 
     if (broadcast > 0) {
         broadcast -= 1;
@@ -196,7 +196,7 @@ function getNextFile(currentFile, setBroadcast) {
 }
 
 function formatFileDate(currentFile) {
-    var date = getDateFromFile(currentFile);
+    let date = getDateFromFile(currentFile);
     return date.toString().substring(0, 21); // e.g. "Wed Jul 28 1993 14:39"
 }
 
@@ -209,13 +209,17 @@ function flashPlayButton(n) {
     $("#playButton").fadeOut(1000).fadeIn(1000, () => flashPlayButton(n-1));
 }
 
+function updateNowPlaying() {
+    $("#fileTime").html(formatFileDate(player.src));
+}
+
 function togglePlayback() {
     if (player.paused) {
         isLoading = true;
         player.play()
             .then(function() {
                 isLoading = false;
-                $("#fileTime").html(formatFileDate(player.src));
+                updateNowPlaying();
                 updateTimeLeft();
             })
             .catch(function(error) {
@@ -253,9 +257,9 @@ function skipAhead(secs) {
 }
 
 function updateTimeLeft() {
-    var remaining = player.duration - player.currentTime;
-    var mins = zeroPad(Math.floor(remaining / 60));
-    var secs = zeroPad(Math.floor(remaining % 60));
+    let remaining = player.duration - player.currentTime;
+    let mins = zeroPad(Math.floor(remaining / 60));
+    let secs = zeroPad(Math.floor(remaining % 60));
     $("#timeLeft").html(isNaN(remaining) ? "--:--" : (mins + ":" + secs));
 }
 
@@ -267,9 +271,13 @@ function resetSleepTimer() {
     return false
 }
 
+function loadCues(file) {
+
+}
+
 function loadCatalog(data) {
     catalog = data;
-    var years = Object.keys(catalog).sort().reverse();
+    let years = Object.keys(catalog).sort().reverse();
     for (year of years) {
         $('#broadcastYear').append($('<option>', { 
             value: year,
@@ -279,8 +287,8 @@ function loadCatalog(data) {
 }
 
 function yearSelected() {
-    var year = $("#broadcastYear option:selected").val();
-    var months = Object.keys(catalog[year]).sort();
+    let year = $("#broadcastYear option:selected").val();
+    let months = Object.keys(catalog[year]).sort();
     $('#broadcastMonth option:not(:first-child)').remove();
     $('#broadcastDay option:not(:first-child)').remove();
     $('#broadcastTime option:not(:first-child)').remove();
@@ -293,10 +301,10 @@ function yearSelected() {
 }
 
 function monthSelected() {
-    var year = $("#broadcastYear option:selected").val();
-    var month = $("#broadcastMonth option:selected").val();
+    let year = $("#broadcastYear option:selected").val();
+    let month = $("#broadcastMonth option:selected").val();
     console.log("monthSelected", year, month);
-    var days = Object.keys(catalog[year][month]).sort();
+    let days = Object.keys(catalog[year][month]).sort();
     $('#broadcastDay option:not(:first-child)').remove();
     $('#broadcastTime option:not(:first-child)').remove();
     for (day of days) {
@@ -308,10 +316,10 @@ function monthSelected() {
 }
 
 function daySelected() {
-    var year = $("#broadcastYear option:selected").val();
-    var month = $("#broadcastMonth option:selected").val();
-    var day = $("#broadcastDay option:selected").val();
-    var times = catalog[year][month][day];
+    let year = $("#broadcastYear option:selected").val();
+    let month = $("#broadcastMonth option:selected").val();
+    let day = $("#broadcastDay option:selected").val();
+    let times = catalog[year][month][day];
     $('#broadcastTime option:not(:first-child)').remove();
     for (time of times) {
         $('#broadcastTime').append($('<option>', { 
@@ -322,18 +330,18 @@ function daySelected() {
 }
 
 function broadcastSelected() {
-    var yr = $("#broadcastYear option:selected").val();
-    var mo = $("#broadcastMonth option:selected").val();
-    var day = $("#broadcastDay option:selected").val();
-    var broadcastTime = $("#broadcastTime option:selected").val();
+    let yr = $("#broadcastYear option:selected").val();
+    let mo = $("#broadcastMonth option:selected").val();
+    let day = $("#broadcastDay option:selected").val();
+    let broadcastTime = $("#broadcastTime option:selected").val();
 
     if (!yr || !mo || !day || !broadcastTime) return;
 
-    var url = [baseUrl, yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
+    let url = [baseUrl, yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
     console.log("broadcastSelected", url);
     playFile(url);
     if (player.paused) togglePlayback();
-}
+} 
 
 function init() {
     player = getPlayer();
