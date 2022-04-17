@@ -2,6 +2,7 @@ import sys, os, time, subprocess, json, tempfile, logging
 import boto3
 from botocore.exceptions import ClientError
 from vosk import Model, KaldiRecognizer, SetLogLevel
+from urllib import parse
 
 SetLogLevel(-1)
 
@@ -89,13 +90,12 @@ def start_catalog(file, event):
 
 def handle_event(event, context):
     set_log_level()
-    logging.info(f"Path={os.getenv('PATH')}")
     config = get_config()
     bucket = config["bucket"]
     s3 = boto3.client("s3")
     work_dir = tempfile.TemporaryDirectory()
     logging.info(f"Instantiating speech recognizer")
-    model_path = event.get("model", "/opt/model")
+    model_path = context.get("model", "/opt/model")
     rec = recognizer(model_path)
     cues = {}
     for mp3_file in event["files"]:
@@ -112,12 +112,64 @@ def handle_event(event, context):
         logging.info(f"Uploading {cue_filename} to s3://{bucket}/{object_name}")
         if in_production():
             s3.upload_file(cue_filename, bucket, object_name, ExtraArgs={'ACL': 'public-read'})
-            start_catalog(mp3_file, data) # probably not a race condition?
+            if not context.get("skip_catalog"):
+                start_catalog(mp3_file, data) # probably not a race condition?
         else:
             logging.info("(not running in production, so not uploading)")
         cues[mp3_file] = data
     return cues
 
+def handle_s3_event(event, context):
+    set_log_level()
+    config = get_config()
+    invocation_id = event['invocationId']
+    invocation_schema_version = event['invocationSchemaVersion']
+    results = []
+
+    context = context.copy()
+    context["skip_catalog"] = True
+
+    for task in event['tasks']:
+        task_id = task['taskId']
+        result_code = None
+        result_string = None
+
+        try:
+            obj_key = parse.unquote(task['s3Key'], encoding='utf-8')
+            # bucket_name = task['s3BucketArn'].split(':')[-1]
+            logging.info("Got task: transcribe %s", obj_key)
+            output = handle_event({"files": [obj_key]}, context)
+            cues = output[obj_key]["cues"]
+            length = output[obj_key]["length"]
+            timings = cues.get("shipping", []) + cues.get("forecast", []) + [length]
+            result_code = 'Succeeded'
+            result_string = ",".join(map(str, timings))
+        except Exception as error:
+            result_code = 'PermanentFailure'
+            result_string = str(error)
+            logging.exception(error)
+        finally:
+            results.append({
+                'taskId': task_id,
+                'resultCode': result_code,
+                'resultString': result_string
+            })
+
+    return {
+        'invocationSchemaVersion': invocation_schema_version,
+        'treatMissingKeysAs': 'PermanentFailure',
+        'invocationId': invocation_id,
+        'results': results
+    }
+
 if __name__ == "__main__":
     import sys
-    handle_event({"files": sys.argv[1:], "model": "detection/model"}, {})
+    if sys.argv[1] == "-s":
+        result = handle_s3_event({
+            "invocationId": "test-run",
+            "invocationSchemaVersion": "0.01",
+            "tasks": [{ "taskId": "1", "s3Key": sys.argv[2] }]
+            }, {"model": "../detection/model"})
+        print(result)
+    else:
+        handle_event({"files": sys.argv[1:]}, {"model": "../detection/model"})
