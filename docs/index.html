@@ -206,7 +206,6 @@ function togglePlayback() {
 }
 
 function playNextFile() {
-    // FIXME: Race condition: what if loadCues() is still loading cues
     playFile(getRandomBroadcast());
 }
 
@@ -246,7 +245,6 @@ function resetSleepTimer() {
 
 function loadCues(file) {
     let url = cueUrl + file + ".json";
-    console.log("loadCues", url);
     return fetch(url)
         .then(res => res.json())
         .then(data => readCues(file, data));
