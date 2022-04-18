@@ -150,7 +150,6 @@ function startFadeIn(fadeSecs) {
     const fadeInterval = 250; // milliseconds
     const volumeIncrement = 1.0 / (fadeSecs * 1000 / fadeInterval);
     const fadeIn = setInterval(() => {
-        console.log("fadeIn", player.volume);
         if (player.volume + volumeIncrement <= 1.0) {
             player.volume += volumeIncrement;
         } else {
@@ -162,10 +161,9 @@ function startFadeIn(fadeSecs) {
 }
 
 function startFadeOut(fadeSecs) {
-    const fadeInterval = 100; // milliseconds
+    const fadeInterval = 250; // milliseconds
     const volumeIncrement = 1.0 / (fadeSecs * 1000 / fadeInterval);
     const fadeOut = setInterval(() => {
-        console.log("fadeOut", player.volume);
         if (player.volume - volumeIncrement >= volumeIncrement) {
             player.volume -= volumeIncrement;
         } else {
@@ -417,8 +415,6 @@ function init() {
     $("#broadcastMonth").change(monthSelected);
     $("#broadcastDay").change(daySelected);
     $("#broadcastTime").change(broadcastSelected);
-
-    flashPlayButton(3);
 }
 
 $(document).ready(init);
