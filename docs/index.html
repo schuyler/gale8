@@ -96,7 +96,7 @@ const broadcastTimes = [ "0048", "0520", "1201", "1754" ];
 const baseUrl = "https://gale8.net/";
 const archiveUrl = baseUrl + "archive/";
 const cueUrl = baseUrl + "cues/";
-const audioFade = 3;
+const audioFade = 5;
 let sleepTimer;
 let player;
 let catalog;
@@ -242,7 +242,7 @@ function resetSleepTimer() {
     if (sleepTimer) {
         clearTimeout(sleepTimer);
     }
-    sleepTimer = setTimeout(function() { player.pause() }, 30 * 60 * 1000);
+    sleepTimer = setTimeout(pausePlayback, 30 * 60 * 1000);
     return false
 }
 
