@@ -252,14 +252,22 @@ function loadCues(file) {
 
 function loadAudio(file) {
     let hasLoaded = new Promise((resolve, reject) => {
-        $(player).off("loadeddata");
-        $(player).on("loadeddata", () => resolve(file));
+        $(player).off("loadeddata").on("loadeddata", () => resolve(file));
     });
-    if (!player.paused) player.pause();
-    $("#fileTime").html("Loading...");
-    $("#timeLeft").html("--:--");
-    player.src = archiveUrl + file;
-    player.load();
+    let hasPaused = new Promise((resolve, reject) => {
+        if (player.paused) {
+            resolve(false);
+        } else {
+            $(player).off("pause").on("pause", () => resolve(true));
+        }
+    });
+    player.pause();
+    hasPaused.then(() => {
+        player.src = archiveUrl + file;
+        $("#fileTime").html("Loading...");
+        $("#timeLeft").html("--:--");
+        player.load();
+    })
     return hasLoaded;
 }
 
