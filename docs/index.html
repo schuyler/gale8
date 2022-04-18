@@ -177,11 +177,8 @@ function startPlayback() {
     // console.log("startPlayback");
     player.play()
         .then(function() {
-            startFadeIn(audioFade);
             isLoading = isEnding = false;
             hidePlayButton();
-            updateNowPlaying();
-            updateTimeLeft();
         })
         .catch(function(error) {
             isLoading = isEnding = false;
@@ -210,7 +207,7 @@ function togglePlayback() {
 
 function playNextFile() {
     // FIXME: Race condition: what if loadCues() is still loading cues
-    loadCues(getRandomBroadcast());
+    playFile(getRandomBroadcast());
 }
 
 function skipAhead(secs) {
@@ -222,6 +219,9 @@ function skipAhead(secs) {
 }
 
 function updateTimeLeft() {
+    if (isLoading) {
+        return;
+    }
     let remaining = currentFile.end - player.currentTime;
     if (remaining <= 0) {
         playNextFile();
@@ -246,17 +246,47 @@ function resetSleepTimer() {
 
 function loadCues(file) {
     let url = cueUrl + file + ".json";
+    console.log("loadCues", url);
+    return fetch(url)
+        .then(res => res.json())
+        .then(data => readCues(file, data));
+}
+
+function loadAudio(file) {
+    let hasLoaded = new Promise((resolve, reject) => {
+        $(player).off("loadeddata");
+        $(player).on("loadeddata", () => resolve(file));
+    });
+    if (!player.paused) player.pause();
+    $("#fileTime").html("Loading...");
+    $("#timeLeft").html("--:--");
+    player.src = archiveUrl + file;
+    player.load();
+    return hasLoaded;
+}
+
+function playFile(file) {
     if (isLoading) {
         return;
     }
     isLoading = true;
-    console.log("loadCues", url);
-    fetch(url)
-        .then(res => res.json())
-        .then(data => readCues(file, data))
-        .then(cue => playFile(cue))
+
+    let cues = loadCues(file),
+        audio = loadAudio(file);
+
+    Promise.all([cues, audio])
+        .then(result => {
+            let [cue, _] = result;
+            currentFile = cue;
+            player.currentTime = currentFile.start;
+            console.log("playFile", currentFile);
+            updateNowPlaying();
+            updateTimeLeft();
+            startFadeIn(audioFade);
+            startPlayback();
+        })
         .catch(err => {
-            console.log("loadCues failed:", err);
+            console.log("playFile failed:", err);
             isLoading = false;
             setTimeout(playNextFile, 500);
         });
@@ -299,16 +329,6 @@ function readCues(file, data) {
         end += audioFade;
     }
     return {file: file, start: start, end: end}
-}
-
-function playFile(cue) {
-    let {file, start, end} = cue;
-    player.src = archiveUrl + file;
-    player.currentTime = start;
-    $("#fileTime").html("Loading...");
-    currentFile = cue;
-    startPlayback();
-    //player.load();
 }
 
 function loadCatalog(data) {
@@ -372,9 +392,9 @@ function broadcastSelected() {
 
     if (!yr || !mo || !day || !broadcastTime) return;
 
-    let url = [yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
-    console.log("broadcastSelected", url);
-    loadCues(url);
+    let file = [yr, mo, day, "Z", broadcastTime, ".mp3"].join("");
+    console.log("broadcastSelected", file);
+    playFile(file);
 } 
 
 function getLastBroadcast() {
@@ -400,21 +420,16 @@ function getRandomBroadcast() {
 
 function init() {
     player = getPlayer();
-    player.addEventListener('ended', function(e) {
-        playNextFile();
-    });
-    player.addEventListener('timeupdate', function(e) {
-        updateTimeLeft();
-    });
-    fetch("archive/catalog.json")
-        .then(res => res.json())
-        .then(data => loadCatalog(data))
-        .then(() => loadCues(getLastBroadcast()));
-
+    $(player).on('ended', playNextFile);
+    $(player).on('timeupdate', updateTimeLeft);
     $("#broadcastYear").change(yearSelected);
     $("#broadcastMonth").change(monthSelected);
     $("#broadcastDay").change(daySelected);
     $("#broadcastTime").change(broadcastSelected);
+    fetch("archive/catalog.json")
+        .then(res => res.json())
+        .then(data => loadCatalog(data))
+        .then(() => playFile(getLastBroadcast()));
 }
 
 $(document).ready(init);
