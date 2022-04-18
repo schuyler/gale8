@@ -56,13 +56,13 @@ delete-rule-0520: check-account
 	./del-rule.sh $(FUNCTION) 05 20
 
 create-rule-1201: check-account
-	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 12 01 7
+	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 12 01 5
 
 delete-rule-1201: check-account
 	./del-rule.sh $(FUNCTION) 12 01
 
 create-rule-1754: check-account
-	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 17 54 7
+	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 17 54 5
 
 delete-rule-1754: check-account
 	./del-rule.sh $(FUNCTION) 17 54

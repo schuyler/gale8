@@ -266,9 +266,10 @@ function loadCues(file) {
 
 function readCues(file, data) {
     // {"cues": {"keyword": [secs1, secs2], "keyword2": ...}, "length": secs}
-    const startBoundary = 2.5 * 60; // assume the forecast starts in the first 3 min of the recording
     let duration = data.length;
-    let endBoundary = duration / 2; // assume the forecast ends in the second half of the recording... somewhere.
+    // These boundaries were sort of worked out empirically.
+    let startBoundary = (duration > 5*60 ? 2.5 : 1.5) * 60;
+    let endBoundary = (duration > 9*60 ? 5 : 3) * 60;
     let cues = data.cues;
     // Find the last mention of the word "shipping" in the first half of the broadcast, because that's probably when the actual forecast starts.
     let start = cues.shipping?.filter(t => t < startBoundary).sort().reverse()[0];
