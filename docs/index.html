@@ -96,12 +96,13 @@ const broadcastTimes = [ "0048", "0520", "1201", "1754" ];
 const baseUrl = "https://gale8.net/";
 const archiveUrl = baseUrl + "archive/";
 const cueUrl = baseUrl + "cues/";
-const audioFade = 5;
+const audioFade = 3;
 let sleepTimer;
 let player;
 let catalog;
 let currentFile;
 let isLoading;
+let isEnding;
 
 let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -145,17 +146,47 @@ function hidePlayButton() {
     $("#playButton")[0].style.visibility = "hidden";
 }
 
+function startFadeIn(fadeSecs) {
+    const fadeInterval = 250; // milliseconds
+    const volumeIncrement = 1.0 / (fadeSecs * 1000 / fadeInterval);
+    const fadeIn = setInterval(() => {
+        console.log("fadeIn", player.volume);
+        if (player.volume + volumeIncrement <= 1.0) {
+            player.volume += volumeIncrement;
+        } else {
+            player.volume = 1.0;
+            clearInterval(fadeIn);
+        }
+    }, fadeInterval);
+    player.volume = 0;
+}
+
+function startFadeOut(fadeSecs) {
+    const fadeInterval = 100; // milliseconds
+    const volumeIncrement = 1.0 / (fadeSecs * 1000 / fadeInterval);
+    const fadeOut = setInterval(() => {
+        console.log("fadeOut", player.volume);
+        if (player.volume - volumeIncrement >= volumeIncrement) {
+            player.volume -= volumeIncrement;
+        } else {
+            player.volume = 0;
+            clearInterval(fadeOut);
+        }
+    }, fadeInterval);
+}
+
 function startPlayback() {
     // console.log("startPlayback");
     player.play()
         .then(function() {
-            isLoading = false;
+            startFadeIn(audioFade);
+            isLoading = isEnding = false;
             hidePlayButton();
             updateNowPlaying();
             updateTimeLeft();
         })
         .catch(function(error) {
-            isLoading = false;
+            isLoading = isEnding = false;
             if (error.name == "NotAllowedError") {
                 console.log("Media playback not permitted yet:", error);
                 flashPlayButton(3);
@@ -198,6 +229,10 @@ function updateTimeLeft() {
         playNextFile();
         return;
     }
+    if (remaining <= audioFade && !isEnding) {
+        isEnding = true;
+        startFadeOut(audioFade);
+    }
     let mins = zeroPad(Math.floor(remaining / 60));
     let secs = zeroPad(Math.floor(remaining % 60));
     $("#timeLeft").html(isNaN(remaining) ? "--:--" : (mins + ":" + secs));
@@ -231,7 +266,7 @@ function loadCues(file) {
 
 function readCues(file, data) {
     // {"cues": {"keyword": [secs1, secs2], "keyword2": ...}, "length": secs}
-    const startBoundary = 2 * 60; // assume the forecast starts in the first 3 min of the recording
+    const startBoundary = 2.5 * 60; // assume the forecast starts in the first 3 min of the recording
     let duration = data.length;
     let endBoundary = duration / 2; // assume the forecast ends in the second half of the recording... somewhere.
     let cues = data.cues;
@@ -260,7 +295,7 @@ function readCues(file, data) {
     if (!end || end < startBoundary) {
         end = duration;
     }
-    // Add <audioFade> seconds of fade out at the end, if there's time.
+    // Add <audioFade>*2 seconds of fade out at the end, if there's time.
     if (end + audioFade < duration) {
         end += audioFade;
     }
@@ -366,6 +401,9 @@ function getRandomBroadcast() {
 
 function init() {
     player = getPlayer();
+    player.addEventListener('ended', function(e) {
+        playNextFile();
+    });
     player.addEventListener('timeupdate', function(e) {
         updateTimeLeft();
     });
