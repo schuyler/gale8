@@ -252,7 +252,10 @@ function loadCues(file) {
 
 function loadAudio(cue) {
     let hasLoaded = new Promise((resolve, reject) => {
-        $(player).off("loadeddata").on("loadeddata", () => resolve(cue));
+        $(player).on("durationchange", () => {
+            resolve(cue);
+            $(player).off("durationchange");
+        });
     });
     player.src = archiveUrl + cue.file + "#t=" + cue.start + "," + cue.end;
     $("#fileTime").html("Loading...");
