@@ -254,7 +254,6 @@ function loadAudio(cue) {
     let hasLoaded = new Promise((resolve, reject) => {
         $(player).off("loadeddata").on("loadeddata", () => resolve(cue));
     });
-    player.pause();
     player.src = archiveUrl + cue.file + "#t=" + cue.start + "," + cue.end;
     $("#fileTime").html("Loading...");
     $("#timeLeft").html("--:--");
@@ -268,7 +267,6 @@ function playFile(file) {
     loadCues(file)
         .then(loadAudio)
         .then(cue => {
-            //if (player.currentTime < cue.start) player.currentTime = cue.start;
             console.log("playFile", cue.file, cue.start, cue.end);
             currentFile = cue;
             updateNowPlaying();
