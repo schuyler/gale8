@@ -1,15 +1,9 @@
-import os
-import logging
-import io
-import json
-import random
-import shutil
+import os, logging, io, json, random, shutil, subprocess, re
 import boto3
-import subprocess
 from botocore.exceptions import ClientError
+from datetime import datetime
 
-BYTES_PER_SEC = 1 << 13
-
+BYTES_PER_SEC = 1 << 14 # 128k mono MP3 audio
 
 def get_config():
     return {
@@ -21,7 +15,6 @@ def get_config():
         "default_length": 45 * 60,
         "fade_secs": 5
     }
-
 
 def set_log_level():
     # https://docs.aws.amazon.com/lambda/latest/dg/python-logging.html
@@ -83,11 +76,10 @@ def get_last_file(catalog):
     yr = pick(catalog)
     mo = pick(catalog[yr])
     day = pick(catalog[yr][mo])
-    timing = catalog[yr][mo][day][-1]
+    timing = "0048" # catalog[yr][mo][day][-1]
     return f"{yr}{mo}{day}Z{timing}.mp3"
 
-
-def get_forecast_times(data, spacing_secs=5):
+def get_forecast_cues(data, spacing_secs=5):
     duration = data["length"]
     start_boundary = (2.5 if duration > 5*60 else 1.5) * 60
     end_boundary = (5 if duration > 9*60 else 3) * 60
@@ -147,6 +139,24 @@ def fade_audio_stream(data, start, end, fade_secs=5):
         logging.error(f"ffmpeg returned {process.returncode}: {err}")
     return output
 
+def get_broadcast_time(file):
+    m = re.match(r'.*\b(....)(..)(..)Z(..)(..).mp3$', file)
+    if not m:
+        logging.error(f"File {file} doesn't match naming format")
+        return ""
+    yr, mo, day, hr, min = map(int, m.groups())
+    when = datetime(yr, mo, day, hr, min)
+    # e.g. Mon Feb 01 2021 05:20
+    return when.strftime("%a %b %d %Y %H:%M")
+
+def generate_vtt_file(text_cues):
+    buffer = "WEBVTT\n\n"
+    for start, end, timing in text_cues:
+        buffer += "1\n"
+        buffer += f"{int(start) // 60:d}:{start % 60:06.3f} --> {int(end) // 60:d}:{end % 60:06.3f}\n"
+        buffer += timing + "\n\n"
+    return io.BytesIO(buffer.encode("utf-8"))
+
 def handle_event(event, context):
     set_log_level()
     config = get_config()
@@ -154,22 +164,24 @@ def handle_event(event, context):
     catalog = download_json(bucket, config["catalog"])
     stream_secs = int(event["length"]) if "length" in event else config["default_length"]
     stream = io.BytesIO()
+    audio_position = 0
+    text_cues = []
     file = get_last_file(catalog)
+    logging.info(f"Generating up to {stream_secs * BYTES_PER_SEC} bytes of MP3 audio")
     while len(stream.getvalue()) < stream_secs * BYTES_PER_SEC:
         cue_data = download_json(bucket, config["cue_prefix"] + file + ".json")
-        start, end = get_forecast_times(cue_data)
-  
+        start, end = get_forecast_cues(cue_data)
         logging.info(f"Truncating {file} from {start}s to {end}s")
-
         audio = download_file(bucket, config["mp3_prefix"] + file)
         faded_audio = fade_audio_stream(audio.getvalue(), start, end, config["fade_secs"])
         stream.write(faded_audio)
-
-        #shutil.copyfileobj(audio, stream)
+        text_cues.append((audio_position, audio_position + end - start, get_broadcast_time(file)))
+        audio_position += end - start
         file = get_random_file(catalog)
     stream.seek(0)
     upload_file(bucket, config["stream_key"], stream)
-
+    vtt_data = generate_vtt_file(text_cues)
+    upload_file(bucket, config["stream_key"] + ".vtt", vtt_data)
 
 if __name__ == "__main__":
     handle_event({}, {})

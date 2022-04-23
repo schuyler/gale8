@@ -1,5 +1,6 @@
 *.zip
 *.mp3
+*.vtt
 docs/archive/catalog.json
 .env
 detection/model
