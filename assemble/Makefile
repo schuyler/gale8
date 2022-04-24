@@ -38,6 +38,12 @@ create-function: upload-latest
 		--memory-size 512 \
 		--timeout 300
 
+create-rule:
+	../download/gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 01 30 2
+
+delete-rule:
+	../download/del-rule.sh $(FUNCTION) 01 30
+
 update-function: upload-latest
 	aws lambda update-function-code \
 		--function-name $(FUNCTION) \
