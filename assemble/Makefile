@@ -1,34 +1,47 @@
-REGION := eu-west-2
-ACCOUNT := $(AWS_ACCOUNT)
-IAM_ROLE := arn:aws:iam::$(ACCOUNT):role/gale8-lambda
+AWS_REGION=eu-west-2
+IMAGE=assemble-stream
+FUNCTION=assemble-stream
+IAM_ROLE := arn:aws:iam::$(AWS_ACCOUNT):role/gale8-lambda
+ECR=$(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
+IMAGE_URI=$(ECR)/$(IMAGE)
 
-all: update-function-assemble_stream clean
+all: update-function
+
+build-latest:
+	docker build . -t $(IMAGE)
+
+run: build-latest
+	docker run -p 9000:8080 --env-file .env --rm $(IMAGE)
+
+test:
+	curl -XPOST http://`minikube ip`:9000/2015-03-31/functions/function/invocations" \
+		-d '{"files": ["archive/20180102Z0520.mp3"]}'
+
+login:
+	aws ecr get-login-password --region $(AWS_REGION) | \
+		docker login --username AWS --password-stdin $(ECR)
+
+create-repo:
+	aws ecr create-repository --repository-name $(IMAGE) \
+		--image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
+
+upload-%: build-%
+	docker tag $(IMAGE):$* $(IMAGE_URI):$*
+	docker push $(IMAGE_URI):$*
+
+create-function: upload-latest
+	aws lambda create-function \
+		--function-name $(FUNCTION) \
+		--package-type Image  \
+		--code ImageUri=$(IMAGE_URI):latest \
+		--role $(IAM_ROLE) \
+		--memory-size 512 \
+		--timeout 300
+
+update-function: upload-latest
+	aws lambda update-function-code \
+		--function-name $(FUNCTION) \
+		--image-uri $(IMAGE_URI):latest
 
 clean:
-	rm -rf __pycache__ build *.zip support-*.txt
-
-check-account:
-	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
-
-create-function-%: check-account %.zip
-	aws lambda create-function \
-		--function-name `echo $* | tr _ -` \
-		--handler $*.handle_event \
-		--runtime python3.9 \
-		--role $(IAM_ROLE) \
-		--timeout 30 \
-		--zip-file fileb://$*.zip
-
-update-function-%: %.zip
-	aws lambda update-function-code \
-		--function-name `echo $* | tr _ -` \
-		--zip-file fileb://$*.zip
-
-delete-function-%:
-	aws lambda delete-function --function-name `echo $* | tr _ -`
-
-%.zip: %.py
-	mkdir build
-	cp $*.py build
-	(cd build && zip -9qr - .) > $*.zip
-	rm -r build
+	docker image rm $(IMAGE)

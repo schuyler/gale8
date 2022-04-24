@@ -111,7 +111,7 @@ def get_forecast_cues(data, spacing_secs=5):
     return (start, end)
 
 
-def fade_audio_stream(data, start, end, fade_secs=5):
+def trim_audio_stream(data, start, end, fade_secs=5):
     # ffmpeg -ss 10 -to 25 -i - -b:a 128k -ac 1 -af "afade=t=in:st=0:d=5,afade=t=out:st=10:d=5" -f mp3 -
     logging.info(f"Re-encoding {end - start}s of MP3 audio")
     fade_start = end - start - fade_secs
@@ -173,8 +173,8 @@ def handle_event(event, context):
         start, end = get_forecast_cues(cue_data)
         logging.info(f"Truncating {file} from {start}s to {end}s")
         audio = download_file(bucket, config["mp3_prefix"] + file)
-        faded_audio = fade_audio_stream(audio.getvalue(), start, end, config["fade_secs"])
-        stream.write(faded_audio)
+        trimmed_audio = trim_audio_stream(audio.getvalue(), start, end, config["fade_secs"])
+        stream.write(trimmed_audio)
         text_cues.append((audio_position, audio_position + end - start, get_broadcast_time(file)))
         audio_position += end - start
         file = get_random_file(catalog)
