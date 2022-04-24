@@ -90,7 +90,7 @@ def set_next_launch(hour, minute, test_date=None):
     try:
         events = boto3.client('events')
         events.put_rule(
-            Name=f"forecast-{hour:02}{minute:02}",
+            Name=f"download-forecast-{hour:02}{minute:02}",
             ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)")
     except ClientError as e:
         logging.error(e)

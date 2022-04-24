@@ -6,7 +6,7 @@ HOUR=$4
 MIN=$5
 DURATION=$6
 
-RULE="forecast-${HOUR}${MIN}"
+RULE="${FUNCTION}-${HOUR}${MIN}"
 
 aws events put-rule \
   --name $RULE \
