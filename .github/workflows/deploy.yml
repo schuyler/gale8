@@ -58,6 +58,26 @@ jobs:
         run: make -C transcribe update-function
         env:
           AWS_ACCOUNT: ${{ secrets.AWS_ACCOUNT }}
+  deploy-assemble:
+    runs-on: ubuntu-latest
+    environment: eu-west-2
+    timeout-minutes: 2
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      - name: Deploy assemble-stream
+        run: make -C assemble update-function
+        env:
+          AWS_ACCOUNT: ${{ secrets.AWS_ACCOUNT }}
   deploy-catalog:
     runs-on: ubuntu-latest
     environment: eu-west-2

@@ -15,3 +15,6 @@ transcribe-forecast:
 
 catalog-forecast:
 	make -C catalog
+
+assemble-stream:
+	make -C assemble
