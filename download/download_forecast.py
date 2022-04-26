@@ -104,7 +104,7 @@ def start_transcription(file):
         Payload=json.dumps({"files": [file]})
     )
 
-def handle_lambda_event(event, context):
+def handle_event(event, context):
     set_log_level()
     duration = int(event.get("duration", 12*60))
     try:
