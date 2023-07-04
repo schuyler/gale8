@@ -1,10 +1,18 @@
-import time, os, logging, tempfile, json, re
-import boto3, pytz
+import time
+import os
+import logging
+import tempfile
+import json
+import signal
+import subprocess
+import boto3
+import pytz
 from datetime import datetime, timedelta
 from urllib.request import urlopen
 from botocore.exceptions import ClientError
 
 london = pytz.timezone('Europe/London')
+
 
 def get_config():
     return {
@@ -14,39 +22,50 @@ def get_config():
         "prefix": "archive/"
     }
 
+
 def set_log_level():
     # https://docs.aws.amazon.com/lambda/latest/dg/python-logging.html
     logging.getLogger().setLevel(logging.INFO)
 
+
 def in_production():
     return os.environ.get("AWS_EXECUTION_ENV") is not None
+
 
 def local_now():
     return datetime.now(london)
 
-def download_stream(stream, target, secs, block_size=1<<13):
-    start = time.time()
+
+def download_stream(stream, target, secs):
     try:
         logging.info(f"downloading {stream} for {secs} s")
-        with urlopen(stream) as source:
-            while time.time() - start < secs:
-                block = source.read(block_size)
-                if not block: break
-                target.write(block)
+        # download *and* re-encode as MP3
+        proc = subprocess.Popen(
+            ['ffmpeg', '-loglevel', 'error',
+                '-i', stream,
+                '-f', 'mp3', target],
+            shell=False)
+        time.sleep(secs)
+        proc.send_signal(signal.SIGINT)
+        proc.wait()
+        if proc.returncode != 0 and proc.returncode != 255:
+            logging.error(f"ffmpeg returned {proc.returncode}")
     except Exception as e:
         logging.error(e)
         return False
     return True
 
+
 def upload_file(filename, bucket, object_name=None):
     if object_name is None:
         object_name = os.path.basename(filename)
     s3_client = boto3.client('s3')
-    extra_args={'ACL': 'public-read'}
+    extra_args = {'ACL': 'public-read'}
     try:
         logging.info(f"uploading {filename} to s3://{bucket}/{object_name}")
         if in_production():
-            s3_client.upload_file(filename, bucket, object_name, ExtraArgs=extra_args)
+            s3_client.upload_file(
+                filename, bucket, object_name, ExtraArgs=extra_args)
         else:
             logging.info(f"(not running in production; upload skipped)")
     except ClientError as e:
@@ -54,16 +73,20 @@ def upload_file(filename, bucket, object_name=None):
         return False
     return True
 
+
 def generate_file_name():
     return local_now().strftime("%Y%m%dZ%H%M") + '.mp3'
 
+
 def wait_until(hour, minute):
     now = local_now()
-    start = london.localize(datetime(now.year, now.month, now.day, hour, minute))
+    start = london.localize(
+        datetime(now.year, now.month, now.day, hour, minute))
     delay = (start - now).total_seconds()
     if delay > 0:
         logging.info(f"waiting {delay:.1f} sec until {hour:02d}:{minute:02d}")
         time.sleep(delay)
+
 
 def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
@@ -74,15 +97,16 @@ def record_stream(stream, bucket, prefix, duration):
             return prefix + filename
     return ""
 
+
 def set_next_launch(hour, minute, test_date=None):
     now = test_date or local_now()
     tomorrow = now + timedelta(days=1)
     start = london.localize(
-            datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
-            - timedelta(minutes=1))
+        datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
+        - timedelta(minutes=1))
     if now.dst() != start.dst():
         logging.info(f"*** difference in DST detected for tomorrow! ***")
-    start = start.astimezone(pytz.utc) # Eventbridge schedules are in UTC!!!
+    start = start.astimezone(pytz.utc)  # Eventbridge schedules are in UTC!!!
     logging.info(f"setting next launch for {start.isoformat()}")
     if test_date:
         logging.info("(running in test mode, so not actually updating)")
@@ -95,6 +119,7 @@ def set_next_launch(hour, minute, test_date=None):
     except ClientError as e:
         logging.error(e)
 
+
 def start_transcription(file):
     lambda_ = boto3.client('lambda')
     logging.info(f"Initiating transcription of {file}")
@@ -103,6 +128,7 @@ def start_transcription(file):
         InvocationType="Event",
         Payload=json.dumps({"files": [file]})
     )
+
 
 def handle_event(event, context):
     set_log_level()
@@ -121,6 +147,7 @@ def handle_event(event, context):
         start_transcription(recording)
     set_next_launch(hour, minute, event.get("test_date"))
 
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "-s":
@@ -134,4 +161,4 @@ if __name__ == "__main__":
     else:
         when = local_now() + timedelta(minutes=1)
         start = f"{when.hour:02}:{when.minute:02}"
-        handle_lambda_event({"duration": 5, "time": start, "test_date": when}, {})
+        handle_event({"duration": 5, "time": start, "test_date": when}, {})
