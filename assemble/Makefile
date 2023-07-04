@@ -1,6 +1,7 @@
 AWS_REGION=eu-west-2
 IMAGE=assemble-stream
 FUNCTION=assemble-stream
+
 IAM_ROLE := arn:aws:iam::$(AWS_ACCOUNT):role/gale8-lambda
 ECR=$(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
 IMAGE_URI=$(ECR)/$(IMAGE)
@@ -49,5 +50,8 @@ update-function: upload-latest
 		--function-name $(FUNCTION) \
 		--image-uri $(IMAGE_URI):latest
 
+delete-function:
+	aws lambda delete-function --function-name $(FUNCTION)
+	
 clean:
 	docker image rm $(IMAGE)

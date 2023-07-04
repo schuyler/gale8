@@ -1,76 +1,89 @@
-REGION := eu-west-2
-ACCOUNT := $(AWS_ACCOUNT)
-IAM_ROLE := arn:aws:iam::$(ACCOUNT):role/gale8-lambda
-FUNCTION = download-forecast
-LAMBDA_ARN := "arn:aws:lambda:$(REGION):$(ACCOUNT):function:$(FUNCTION)"
+AWS_REGION=eu-west-2
+FUNCTION=download-forecast
+IMAGE=download-forecast
 
-all: update-function-download_forecast check-launch clean
+IAM_ROLE := arn:aws:iam::$(AWS_ACCOUNT):role/gale8-lambda
+ECR=$(AWS_ACCOUNT).dkr.ecr.$(AWS_REGION).amazonaws.com
+IMAGE_URI=$(ECR)/$(IMAGE)
 
-clean:
-	rm -rf __pycache__ build *.zip support-*.txt
+all: update-function check-launch
 
-check-account:
-	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
+build-latest:
+	docker build . -t $(IMAGE)
+
+run: build-latest
+	docker run -p 9000:8080 --env-file .env --rm $(IMAGE)
+
+login:
+	aws ecr get-login-password --region $(AWS_REGION) | \
+		docker login --username AWS --password-stdin $(ECR)
+
+create-repo:
+	aws ecr create-repository --repository-name $(IMAGE) \
+		--image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE
+
+upload-%: build-% login
+	docker tag $(IMAGE):$* $(IMAGE_URI):$*
+	docker push $(IMAGE_URI):$*
 
 check-stream:
-	@[ -n "$(STREAM)" ] || (echo "Try again by passing STREAM to make" && false)
+	@[ -n "$(FORECAST_STREAM)" ] || (echo "Try again by passing FORECAST_STREAM to make" && false)
 
-create-function-%: check-account check-stream %.zip
+check-account:
+	@[ -n "$(AWS_ACCOUNT)" ] || (echo "Try again by passing AWS_ACCOUNT to make" && false)
+
+create-function: check-stream upload-latest
 	aws lambda create-function \
-		--function-name `echo $* | tr _ -` \
-		--handler $*.handle_event \
-		--runtime python3.9 \
+		--function-name $(FUNCTION) \
+		--package-type Image  \
+		--code ImageUri=$(IMAGE_URI):latest \
 		--role $(IAM_ROLE) \
-		--environment "Variables={FORECAST_STREAM=$(STREAM)}" \
-		--timeout 900 \
-		--zip-file fileb://$*.zip
+		--memory-size 512 \
+		--environment "Variables={FORECAST_STREAM=$(FORECAST_STREAM)}" \
+		--timeout 900
 
-update-function-%: %.zip
+update-function: upload-latest
 	aws lambda update-function-code \
-		--function-name `echo $* | tr _ -` \
-		--zip-file fileb://$*.zip
+		--function-name $(FUNCTION) \
+		--image-uri $(IMAGE_URI):latest
 
-delete-function-%:
-	aws lambda delete-function --function-name `echo $* | tr _ -`
-
-%.zip: %.py
-	mkdir build
-	cp $*.py build
-	pip3 install -t build pytz
-	(cd build && zip -9qr - .) > $*.zip
-	rm -r build
+delete-function:
+	aws lambda delete-function --function-name $(FUNCTION)
 
 check-launch:
 	python3 download_forecast.py -s
 
 create-rule-0048: check-account
-	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 00 48 12
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 00 48 12
 
 delete-rule-0048: check-account
 	./del-rule.sh $(FUNCTION) 00 48
 
 create-rule-0520: check-account
-	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 05 20 12
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 05 20 12
 
 delete-rule-0520: check-account
 	./del-rule.sh $(FUNCTION) 05 20
 
 create-rule-1201: check-account
-	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 12 01 5
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 12 01 5
 
 delete-rule-1201: check-account
 	./del-rule.sh $(FUNCTION) 12 01
 
 create-rule-1754: check-account
-	./gen-rule.sh $(REGION) $(ACCOUNT) $(FUNCTION) 17 54 5
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 17 54 5
 
 delete-rule-1754: check-account
 	./del-rule.sh $(FUNCTION) 17 54
 
-create: create-function-download_forecast \
+create: create-function \
 	create-rule-0048 create-rule-0520 create-rule-1201 create-rule-1754 \
 	build support clean
 
-destroy: delete-function-download_forecast \
+destroy: delete-function \
 	delete-rule-0048 delete-rule-0520 delete-rule-1201 delete-rule-1754 \
 	clean
+
+clean:
+	docker image rm $(IMAGE)
