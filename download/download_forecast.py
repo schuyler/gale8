@@ -93,7 +93,7 @@ def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
     filename = generate_file_name()
     with tempfile.TemporaryDirectory() as tempdir:
-        target = os.path.join(tempdir.name, filename)
+        target = os.path.join(tempdir, filename)
         if download_stream(stream, target, duration):
             upload_file(target, bucket, prefix + filename)
             return prefix + filename
