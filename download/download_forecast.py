@@ -8,7 +8,6 @@ import subprocess
 import boto3
 import pytz
 from datetime import datetime, timedelta
-from urllib.request import urlopen
 from botocore.exceptions import ClientError
 
 london = pytz.timezone('Europe/London')
@@ -92,7 +91,7 @@ def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
     filename = generate_file_name()
     with tempfile.NamedTemporaryFile() as temp:
-        if download_stream(stream, temp, duration):
+        if download_stream(stream, temp.name, duration):
             upload_file(temp.name, bucket, prefix + filename)
             return prefix + filename
     return ""
