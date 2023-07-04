@@ -24,20 +24,23 @@ jobs:
   deploy-download:
     runs-on: ubuntu-latest
     environment: eu-west-2
-    timeout-minutes: 1
+    timeout-minutes: 2
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
-      - name: Install requirements
-        run: pip3 install -r download/requirements.txt
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-west-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
       - name: Deploy download-forecast
-        run: make -C download
+        run: make -C download update-function
+        env:
+          AWS_ACCOUNT: ${{ secrets.AWS_ACCOUNT }}
   deploy-transcribe:
     runs-on: ubuntu-latest
     environment: eu-west-2
