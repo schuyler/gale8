@@ -1,5 +1,6 @@
 import time
 import os
+import os.path
 import logging
 import tempfile
 import json
@@ -41,6 +42,7 @@ def download_stream(stream, target, secs):
         # download *and* re-encode as MP3
         proc = subprocess.Popen(
             ['ffmpeg', '-loglevel', 'error',
+                '-y',
                 '-i', stream,
                 '-f', 'mp3', target],
             shell=False)
@@ -90,9 +92,10 @@ def wait_until(hour, minute):
 def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
     filename = generate_file_name()
-    with tempfile.NamedTemporaryFile() as temp:
-        if download_stream(stream, temp.name, duration):
-            upload_file(temp.name, bucket, prefix + filename)
+    with tempfile.TemporaryDirectory() as tempdir:
+        target = os.path.join(tempdir.name, filename)
+        if download_stream(stream, target, duration):
+            upload_file(target, bucket, prefix + filename)
             return prefix + filename
     return ""
 
