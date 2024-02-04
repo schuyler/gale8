@@ -28,6 +28,7 @@ upload-%: build-% login
 
 check-stream:
 	@[ -n "$(FORECAST_STREAM)" ] || (echo "Try again by passing FORECAST_STREAM to make" && false)
+	@[ -n "$(ERROR_TOPIC_ARN)" ] || (echo "Try again by passing ERROR_TOPIC_ARN to make" && false)
 
 check-account:
 	@[ -n "$(AWS_ACCOUNT)" ] || (echo "Try again by passing AWS_ACCOUNT to make" && false)
@@ -39,13 +40,18 @@ create-function: check-stream upload-latest
 		--code ImageUri=$(IMAGE_URI):latest \
 		--role $(IAM_ROLE) \
 		--memory-size 512 \
-		--environment "Variables={FORECAST_STREAM=$(FORECAST_STREAM)}" \
+		--environment "Variables={FORECAST_STREAM=$(FORECAST_STREAM),ERROR_TOPIC_ARN=$(ERROR_TOPIC_ARN)}" \
 		--timeout 900
 
 update-function: upload-latest
 	aws lambda update-function-code \
 		--function-name $(FUNCTION) \
 		--image-uri $(IMAGE_URI):latest
+
+update-function-environment: check-stream
+	aws lambda update-function-configuration \
+		--function-name $(FUNCTION) \
+		--environment "Variables={FORECAST_STREAM=$(FORECAST_STREAM),ERROR_TOPIC_ARN=$(ERROR_TOPIC_ARN)}" \
 
 delete-function:
 	aws lambda delete-function --function-name $(FUNCTION)

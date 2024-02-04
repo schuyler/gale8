@@ -6,6 +6,7 @@ import tempfile
 import json
 import signal
 import subprocess
+import traceback
 import boto3
 import pytz
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ def get_config():
     return {
         # https://gist.github.com/bpsib/67089b959e4fa898af69fea59ad74bc3
         "stream": os.environ["FORECAST_STREAM"],
+        "notify": os.environ["ERROR_TOPIC_ARN"],
         "bucket": "gale8-uk",
         "prefix": "archive/"
     }
@@ -36,24 +38,33 @@ def local_now():
     return datetime.now(london)
 
 
+def notify(msg):
+    if not in_production():
+        return
+    sns = boto3.resource("sns")
+    arn = get_config()["notify"]
+    topic = sns.Topic(arn)
+    hour_min = local_now().strftime("%H:%M")
+    topic.publish(
+        Subject=f"[{hour_min}] download_forecast: {str(msg)}",
+        Message=traceback.format_exc()
+    )
+
+
 def download_stream(stream, target, secs):
-    try:
-        logging.info(f"downloading {stream} for {secs} s")
-        # download *and* re-encode as MP3
-        proc = subprocess.Popen(
-            ['ffmpeg', '-loglevel', 'error',
-                '-y',
-                '-i', stream,
-                '-f', 'mp3', target],
-            shell=False)
-        time.sleep(secs)
-        proc.send_signal(signal.SIGINT)
-        proc.wait()
-        if proc.returncode != 0 and proc.returncode != 255:
-            logging.error(f"ffmpeg returned {proc.returncode}")
-    except Exception as e:
-        logging.error(e)
-        return False
+    logging.info(f"downloading {stream} for {secs} s")
+    # download *and* re-encode as MP3
+    proc = subprocess.Popen(
+        ['ffmpeg', '-loglevel', 'error',
+            '-y',
+            '-i', stream,
+            '-f', 'mp3', target],
+        shell=False)
+    time.sleep(secs)
+    proc.send_signal(signal.SIGINT)
+    proc.wait()
+    if proc.returncode != 0 and proc.returncode != 255:
+        raise Exception(f"ffmpeg returned {proc.returncode}")
     return True
 
 
@@ -62,17 +73,14 @@ def upload_file(filename, bucket, object_name=None):
         object_name = os.path.basename(filename)
     s3_client = boto3.client('s3')
     extra_args = {'ACL': 'public-read'}
-    try:
-        logging.info(f"uploading {filename} to s3://{bucket}/{object_name}")
-        if in_production():
-            s3_client.upload_file(
-                filename, bucket, object_name, ExtraArgs=extra_args)
-        else:
-            logging.info(f"(not running in production; upload skipped)")
-    except ClientError as e:
-        logging.error(e)
+    logging.info(f"uploading {filename} to s3://{bucket}/{object_name}")
+    if in_production():
+        s3_client.upload_file(
+            filename, bucket, object_name, ExtraArgs=extra_args)
+        return True
+    else:
+        logging.info(f"(not running in production; upload skipped)")
         return False
-    return True
 
 
 def generate_file_name():
@@ -94,8 +102,8 @@ def record_stream(stream, bucket, prefix, duration):
     filename = generate_file_name()
     with tempfile.TemporaryDirectory() as tempdir:
         target = os.path.join(tempdir, filename)
-        if download_stream(stream, target, duration):
-            upload_file(target, bucket, prefix + filename)
+        if download_stream(stream, target, duration) \
+                and upload_file(target, bucket, prefix + filename):
             return prefix + filename
     return ""
 
@@ -113,13 +121,10 @@ def set_next_launch(hour, minute, test_date=None):
     if test_date:
         logging.info("(running in test mode, so not actually updating)")
         return
-    try:
-        events = boto3.client('events')
-        events.put_rule(
-            Name=f"download-forecast-{hour:02}{minute:02}",
-            ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)")
-    except ClientError as e:
-        logging.error(e)
+    events = boto3.client('events')
+    events.put_rule(
+        Name=f"download-forecast-{hour:02}{minute:02}",
+        ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)")
 
 
 def start_transcription(file):
@@ -137,17 +142,21 @@ def handle_event(event, context):
     duration = int(event.get("duration", 12*60))
     try:
         hour, minute = map(int, event["time"].split(":"))
+        config = get_config()
+        stream = event.get("stream", config["stream"])
+        bucket, prefix = config["bucket"], config["prefix"]
+        wait_until(hour, minute)
+        recording = record_stream(stream, bucket, prefix, duration)
+        if recording:
+            start_transcription(recording)
     except Exception as e:
-        logging.error(e)
-        return
-    config = get_config()
-    stream = event.get("stream", config["stream"])
-    bucket, prefix = config["bucket"], config["prefix"]
-    wait_until(hour, minute)
-    recording = record_stream(stream, bucket, prefix, duration)
-    if recording:
-        start_transcription(recording)
-    set_next_launch(hour, minute, event.get("test_date"))
+        logging.exception("handle_event failure")
+        notify("handle_event failure")
+    try:
+        set_next_launch(hour, minute, event.get("test_date"))
+    except Exception as e:
+        logging.exception("set_next_launch failure")
+        notify("set_next_launch failure")
 
 
 if __name__ == "__main__":
