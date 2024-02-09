@@ -1,2 +1,4 @@
+urllib3<2
+boto3
 vosk
 pytz
