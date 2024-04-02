@@ -2,7 +2,7 @@
 *.mp3
 *.vtt
 docs/archive/catalog.json
-.env
+.envrc
 detection/model
 build/
 batch/
