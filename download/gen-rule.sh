@@ -5,12 +5,14 @@ FUNCTION=$3
 HOUR=$4
 MIN=$5
 DURATION=$6
+DAYS_OF_WEEK=${7:-*}
 
 RULE="${FUNCTION}-${HOUR}${MIN}"
 
+# cron(Minutes Hours Day-of-month Month Day-of-week Year)
 aws events put-rule \
   --name $RULE \
-  --schedule-expression "cron($(($MIN - 1)) $HOUR ? * * *)"
+  --schedule-expression "cron($MIN $HOUR ? * $DAYS_OF_WEEK *)"
 
 cat >tmp.json <<EOF
 [

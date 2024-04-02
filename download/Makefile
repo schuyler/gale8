@@ -78,17 +78,17 @@ delete-rule-1201: check-account
 	./del-rule.sh $(FUNCTION) 12 01
 
 create-rule-1754: check-account
-	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 17 54 5
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 17 54 0,6
 
 delete-rule-1754: check-account
 	./del-rule.sh $(FUNCTION) 17 54
 
 create: create-function \
-	create-rule-0048 create-rule-0520 create-rule-1201 create-rule-1754 \
+	create-rule-0048 create-rule-0520 create-rule-1754 \
 	build support clean
 
 destroy: delete-function \
-	delete-rule-0048 delete-rule-0520 delete-rule-1201 delete-rule-1754 \
+	delete-rule-0048 delete-rule-0520 delete-rule-1754 \
 	clean
 
 clean:
