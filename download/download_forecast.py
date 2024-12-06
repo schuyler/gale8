@@ -14,7 +14,6 @@ from botocore.exceptions import ClientError
 
 london = pytz.timezone('Europe/London')
 
-
 def get_config():
     return {
         # https://gist.github.com/bpsib/67089b959e4fa898af69fea59ad74bc3
@@ -24,19 +23,15 @@ def get_config():
         "prefix": "archive/"
     }
 
-
 def set_log_level():
     # https://docs.aws.amazon.com/lambda/latest/dg/python-logging.html
     logging.getLogger().setLevel(logging.INFO)
 
-
 def in_production():
     return os.environ.get("AWS_EXECUTION_ENV") is not None
 
-
 def local_now():
     return datetime.now(london)
-
 
 def notify(msg):
     if not in_production():
@@ -49,7 +44,6 @@ def notify(msg):
         Subject=f"[{hour_min}] download_forecast: {str(msg)}",
         Message=traceback.format_exc()
     )
-
 
 def download_stream(stream, target, secs):
     logging.info(f"downloading {stream} for {secs} s")
@@ -128,7 +122,6 @@ def download_stream(stream, target, secs):
             os.remove(target)
         raise
 
-
 def upload_file(filename, bucket, object_name=None):
     if object_name is None:
         object_name = os.path.basename(filename)
@@ -143,10 +136,8 @@ def upload_file(filename, bucket, object_name=None):
         logging.info(f"(not running in production; upload skipped)")
         return False
 
-
 def generate_file_name():
     return local_now().strftime("%Y%m%dZ%H%M") + '.mp3'
-
 
 def wait_until(hour, minute):
     now = local_now()
@@ -157,7 +148,6 @@ def wait_until(hour, minute):
         logging.info(f"waiting {delay:.1f} sec until {hour:02d}:{minute:02d}")
         time.sleep(delay)
 
-
 def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
     filename = generate_file_name()
@@ -167,7 +157,6 @@ def record_stream(stream, bucket, prefix, duration):
                 and upload_file(target, bucket, prefix + filename):
             return prefix + filename
     return ""
-
 
 def set_next_launch(hour, minute, test_date=None):
     now = test_date or local_now()
@@ -183,10 +172,17 @@ def set_next_launch(hour, minute, test_date=None):
         logging.info("(running in test mode, so not actually updating)")
         return
     events = boto3.client('events')
-    events.put_rule(
-        Name=f"download-forecast-{hour:02}{minute:02}",
-        ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)")
-
+    # Schedule for the weekend (Saturday and Sunday)
+    if (hour, minute) == (17, 54):
+      events.put_rule(
+          Name=f"download-forecast-{hour:02}{minute:02}",
+          ScheduleExpression=f"cron({start.minute} {start.hour} ? * 0,6 *)"
+      )
+    else:
+      events.put_rule(
+          Name=f"download-forecast-{hour:02}{minute:02}",
+          ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)"
+      )
 
 def start_transcription(file):
     lambda_ = boto3.client('lambda')
@@ -196,7 +192,6 @@ def start_transcription(file):
         InvocationType="Event",
         Payload=json.dumps({"files": [file]})
     )
-
 
 def handle_event(event, context):
     set_log_level()
@@ -218,7 +213,6 @@ def handle_event(event, context):
     except Exception as e:
         logging.exception("set_next_launch failure")
         notify("set_next_launch failure")
-
 
 if __name__ == "__main__":
     import sys
