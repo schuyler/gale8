@@ -53,19 +53,80 @@ def notify(msg):
 
 def download_stream(stream, target, secs):
     logging.info(f"downloading {stream} for {secs} s")
-    # download *and* re-encode as MP3
-    proc = subprocess.Popen(
-        ['ffmpeg', '-loglevel', 'error',
-            '-y',
-            '-i', stream,
-            '-f', 'mp3', target],
-        shell=False)
-    time.sleep(secs)
-    proc.send_signal(signal.SIGINT)
-    proc.wait()
-    if proc.returncode != 0 and proc.returncode != 255:
-        raise Exception(f"ffmpeg returned {proc.returncode}")
-    return True
+    
+    # Use larger buffers and more resilient settings
+    ffmpeg_cmd = [
+        'ffmpeg',
+        '-loglevel', 'warning',  # Show warnings for debugging
+        '-y',
+        '-reconnect', '1',  # Enable reconnection
+        '-reconnect_at_eof', '1',
+        '-reconnect_streamed', '1',
+        '-reconnect_delay_max', '10',  # Maximum reconnection delay
+        '-i', stream,
+        '-bufsize', '8192k',  # Increase buffer size
+        '-f', 'mp3',
+        '-progress', 'pipe:1',  # Output progress to pipe
+        target
+    ]
+    
+    start_time = time.time()
+    end_time = start_time + secs
+    
+    try:
+        proc = subprocess.Popen(
+            ffmpeg_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+        
+        last_progress_time = start_time
+        while time.time() < end_time:
+            # Check if process is still alive
+            if proc.poll() is not None:
+                raise Exception(f"ffmpeg process died prematurely with return code {proc.returncode}")
+            
+            # Read progress to prevent pipe buffer from filling
+            if proc.stdout.readable():
+                line = proc.stdout.readline()
+                if line:
+                    last_progress_time = time.time()
+                
+            # Check for stalled download (no progress for 30 seconds)
+            if time.time() - last_progress_time > 30:
+                logging.warning("Download appears stalled, restarting ffmpeg")
+                proc.terminate()
+                raise Exception("Download stalled")
+            
+            time.sleep(1)
+        
+        # Graceful shutdown
+        logging.info("Initiating graceful shutdown of ffmpeg")
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)  # Give it 10 seconds to shut down gracefully
+        except subprocess.TimeoutExpired:
+            logging.warning("ffmpeg didn't terminate gracefully, forcing shutdown")
+            proc.kill()
+            proc.wait()
+        
+        if proc.returncode != 0 and proc.returncode != 255:
+            stderr_output = proc.stderr.read() if proc.stderr else "No error output"
+            raise Exception(f"ffmpeg failed with return code {proc.returncode}. Error: {stderr_output}")
+        
+        # Verify the output file exists and has content
+        if not os.path.exists(target) or os.path.getsize(target) == 0:
+            raise Exception("Output file is missing or empty")
+            
+        return True
+        
+    except Exception as e:
+        logging.error(f"Download failed: {str(e)}")
+        # Clean up partial file
+        if os.path.exists(target):
+            os.remove(target)
+        raise
 
 
 def upload_file(filename, bucket, object_name=None):
