@@ -16,7 +16,7 @@ london = pytz.timezone('Europe/London')
 
 broadcast_times = (
     (0, 48, "*"),
-    (20, 5, "*")
+    (20, 5, "*"),
     (54, 17, "0,6")
 )
 
@@ -164,31 +164,25 @@ def record_stream(stream, bucket, prefix, duration):
             return prefix + filename
     return ""
 
-def set_next_launch(hour, minute, test_date=None):
+def set_next_launch(test_date=None):
     now = test_date or local_now()
     tomorrow = now + timedelta(days=1)
+    events = boto3.client('events')
+
     start = london.localize(
         datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
         - timedelta(minutes=1))
     if now.dst() != start.dst():
         logging.info(f"*** difference in DST detected for tomorrow! ***")
+
     start = start.astimezone(pytz.utc)  # Eventbridge schedules are in UTC!!!
-    logging.info(f"setting next launch for {start.isoformat()}")
-    if test_date:
-        logging.info("(running in test mode, so not actually updating)")
-        return
-    events = boto3.client('events')
-    # Schedule for the weekend (Saturday and Sunday)
-    if (hour, minute) == (17, 54):
-      events.put_rule(
-          Name=f"download-forecast-{hour:02}{minute:02}",
-          ScheduleExpression=f"cron({start.minute} {start.hour} ? * 0,6 *)"
-      )
-    else:
-      events.put_rule(
-          Name=f"download-forecast-{hour:02}{minute:02}",
-          ScheduleExpression=f"cron({start.minute} {start.hour} ? * * *)"
-      )
+    if not test_date:
+        logging.info(f"setting next launch for {start.isoformat()}")
+        for hour, minute, days_of_week in broadcast_times:
+            events.put_rule(
+                Name=f"download-forecast-{hour:02}{minute:02}",
+                ScheduleExpression=f"cron({start.minute} {start.hour} ? * {days_of_week} *)"
+            )
 
 def start_transcription(file):
     lambda_ = boto3.client('lambda')
@@ -215,7 +209,7 @@ def handle_event(event, context):
         logging.exception("handle_event failure")
         notify("handle_event failure")
     try:
-        set_next_launch(hour, minute, event.get("test_date"))
+        set_next_launch(event.get("test_date"))
     except Exception as e:
         logging.exception("set_next_launch failure")
         notify("set_next_launch failure")
@@ -228,8 +222,7 @@ if __name__ == "__main__":
         when = None
         if len(sys.argv) > 2:
             when = london.localize(datetime.strptime(sys.argv[2], "%Y-%m-%d"))
-        for h, m in ((0, 48), (5, 20), (17, 54)):
-            set_next_launch(h, m, when)
+        set_next_launch(when)
     else:
         when = local_now() + timedelta(minutes=1)
         start = f"{when.hour:02}:{when.minute:02}"
