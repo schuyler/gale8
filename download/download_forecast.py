@@ -14,6 +14,12 @@ from botocore.exceptions import ClientError
 
 london = pytz.timezone('Europe/London')
 
+broadcast_times = (
+    (0, 48, "*"),
+    (20, 5, "*")
+    (54, 17, "0,6")
+)
+
 def get_config():
     return {
         # https://gist.github.com/bpsib/67089b959e4fa898af69fea59ad74bc3
@@ -222,7 +228,7 @@ if __name__ == "__main__":
         when = None
         if len(sys.argv) > 2:
             when = london.localize(datetime.strptime(sys.argv[2], "%Y-%m-%d"))
-        for h, m in ((0, 48), (5, 20), (12, 1), (17, 54)):
+        for h, m in ((0, 48), (5, 20), (17, 54)):
             set_next_launch(h, m, when)
     else:
         when = local_now() + timedelta(minutes=1)
