@@ -10,3 +10,6 @@ audio/
 */.vscode/
 venv
 __pycache__
+.aider.*
+.aider*
+.env
