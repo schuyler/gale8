@@ -18,7 +18,7 @@ def get_expected_length(filename):
         if hhmm == "0048" or hhmm == "0520":
             return 720
         elif hhmm == "1754" or hhmm == "1201":
-            return 300
+            return 360
         else:
             return 0  # Unknown broadcast time
     except (IndexError, ValueError):
@@ -33,7 +33,7 @@ def main():
     start_date = datetime(2024, 4, 1, tzinfo=timezone.utc)
 
     for obj in bucket.objects.filter(Prefix=prefix):
-        if obj.key.endswith(".json") and obj.last_modified >= start_date:
+        if obj.key.endswith(".json"): # and obj.last_modified >= start_date:
             cue_file_content = json.loads(obj.get()['Body'].read().decode('utf-8'))
             if "length" in cue_file_content:
                 length = cue_file_content["length"]
