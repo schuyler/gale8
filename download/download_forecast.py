@@ -16,8 +16,8 @@ london = pytz.timezone('Europe/London')
 
 broadcast_times = (
     (0, 48, "*"),
-    (20, 5, "*"),
-    (54, 17, "0,6")
+    (5, 20, "*"),
+    (17, 54, "0,6")
 )
 
 def get_config():
@@ -169,16 +169,17 @@ def set_next_launch(test_date=None):
     tomorrow = now + timedelta(days=1)
     events = boto3.client('events')
 
-    start = london.localize(
-        datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
-        - timedelta(minutes=1))
-    if now.dst() != start.dst():
-        logging.info(f"*** difference in DST detected for tomorrow! ***")
-
-    start = start.astimezone(pytz.utc)  # Eventbridge schedules are in UTC!!!
-    if not test_date:
+    for hour, minute, days_of_week in broadcast_times:
+        start = london.localize(
+            datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
+            - timedelta(minutes=1))
         logging.info(f"setting next launch for {start.isoformat()}")
-        for hour, minute, days_of_week in broadcast_times:
+
+        if now.dst() != start.dst():
+            logging.info(f"*** difference in DST detected for tomorrow at {hour:02}:{minute:02}! ***")
+
+        start = start.astimezone(pytz.utc)  # Eventbridge schedules are in UTC!!!
+        if not test_date:
             events.put_rule(
                 Name=f"download-forecast-{hour:02}{minute:02}",
                 ScheduleExpression=f"cron({start.minute} {start.hour} ? * {days_of_week} *)"
