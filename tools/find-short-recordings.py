@@ -15,7 +15,7 @@ def get_expected_length(filename):
         # Extract HHMM from the filename
         hhmm = filename[-8:-4]
 
-        if hhmm == "0048":
+        if hhmm == "0048" or hhmm == "0520":
             return 720
         elif hhmm == "1754" or hhmm == "1201":
             return 300
@@ -42,7 +42,7 @@ def main():
                 expected_length = get_expected_length(filename)
 
                 if expected_length > 0 and length <= expected_length / 2:
-                    print(filename)
+                    print(filename + " " + str(length))
 
 if __name__ == "__main__":
     main()
