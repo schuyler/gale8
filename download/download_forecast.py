@@ -156,7 +156,7 @@ def wait_until(hour, minute):
 def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
     filename = generate_file_name()
-    with tempfile.TemporaryDirectory(delete=False) as tempdir:
+    with tempfile.TemporaryDirectory() as tempdir:
         target = os.path.join(tempdir, filename)
         if download_stream(stream, target, duration) \
                 and upload_file(target, bucket, prefix + filename):
