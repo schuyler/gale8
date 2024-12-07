@@ -77,9 +77,9 @@ create-rule-1754: check-account
 delete-rule-1754: check-account
 	./del-rule.sh $(FUNCTION) 17 54
 
-create: create-function \
+create: upload-latest create-function \
 	create-rule-0048 create-rule-0520 create-rule-1754 \
-	build support clean
+	clean
 
 destroy: delete-function \
 	delete-rule-0048 delete-rule-0520 delete-rule-1754 \
