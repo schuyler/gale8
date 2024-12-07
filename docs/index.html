@@ -187,14 +187,15 @@ function startFadeOut(fadeSecs) {
 }
 
 function startPlayback() {
+    // console.log("startPlayback");
     player.play()
         .then(function() {
             isLoading = isEnding = false;
-            hidePlayButton();
+            // Hide the play button only when the media is definitely rolling
+            $(player).on('playing', hidePlayButton);
         })
         .catch(function(error) {
             isLoading = isEnding = false;
-            showPlayButton();
             if (error.name == "NotAllowedError") {
                 console.log("Media playback not permitted yet:", error);
                 flashPlayButton(3);
@@ -203,6 +204,7 @@ function startPlayback() {
                 setTimeout(playNextFile, 500);
             }
         });
+    showPlayButton(); // Show the play button until playback starts
 }
 
 function pausePlayback() {
@@ -280,7 +282,6 @@ function loadAudio(cue) {
 function playFile(file) {
     if (isLoading) return;
     isLoading = true;
-    showPlayButton(); // Show button while loading
     loadCues(file)
         .then(loadAudio)
         .then(cue => {
@@ -294,7 +295,6 @@ function playFile(file) {
         .catch(err => {
             console.log("playFile failed:", err);
             isLoading = false;
-            showPlayButton();
             setTimeout(playNextFile, 500);
         });
 }
@@ -436,7 +436,10 @@ function init() {
     fetch(archiveUrl + "catalog.json")
         .then(res => res.json())
         .then(data => loadCatalog(data))
-        .then(() => playFile(getLastBroadcast()));
+        .then(() => {
+            showPlayButton(); // Ensure the play button is visible initially
+            playFile(getLastBroadcast());
+        });
 }
 
 $(document).ready(init);
@@ -457,7 +460,7 @@ $(document).ready(init);
         </a>
     </div>
     <div id="controls">
-        <audio id="player" src=""></audio>
+        <audio id="player" src="" preload="none"></audio>
     </div>
     <div id="nowPlaying">
         <span class="shaded">Now Playing:</span>
