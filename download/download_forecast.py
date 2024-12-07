@@ -18,7 +18,7 @@ london = pytz.timezone('Europe/London')
 broadcast_times = (
     (0, 48, "*"),
     (5, 20, "*"),
-    (17, 54, "0,6")
+    (17, 54, "1,7")
 )
 
 def get_config():

@@ -72,7 +72,7 @@ delete-rule-0520: check-account
 	./del-rule.sh $(FUNCTION) 05 20
 
 create-rule-1754: check-account
-	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 17 54 6 0,6
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 17 54 6 1,7
 
 delete-rule-1754: check-account
 	./del-rule.sh $(FUNCTION) 17 54
