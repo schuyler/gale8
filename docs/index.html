@@ -187,7 +187,6 @@ function startFadeOut(fadeSecs) {
 }
 
 function startPlayback() {
-    // console.log("startPlayback");
     player.play()
         .then(function() {
             isLoading = isEnding = false;
@@ -195,6 +194,7 @@ function startPlayback() {
         })
         .catch(function(error) {
             isLoading = isEnding = false;
+            showPlayButton();
             if (error.name == "NotAllowedError") {
                 console.log("Media playback not permitted yet:", error);
                 flashPlayButton(3);
@@ -280,6 +280,7 @@ function loadAudio(cue) {
 function playFile(file) {
     if (isLoading) return;
     isLoading = true;
+    showPlayButton(); // Show button while loading
     loadCues(file)
         .then(loadAudio)
         .then(cue => {
@@ -293,6 +294,7 @@ function playFile(file) {
         .catch(err => {
             console.log("playFile failed:", err);
             isLoading = false;
+            showPlayButton();
             setTimeout(playNextFile, 500);
         });
 }
@@ -431,7 +433,7 @@ function init() {
     $("#broadcastMonth").change(monthSelected);
     $("#broadcastDay").change(daySelected);
     $("#broadcastTime").change(broadcastSelected);
-    fetch("archive/catalog.json")
+    fetch(archiveUrl + "catalog.json")
         .then(res => res.json())
         .then(data => loadCatalog(data))
         .then(() => playFile(getLastBroadcast()));
