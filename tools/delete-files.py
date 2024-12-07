@@ -20,5 +20,5 @@ def delete_files(bucket_name, mp3_filenames):
 
 if __name__ == "__main__":
     bucket_name = 'gale8-uk'
-    mp3_filenames = [line.strip() for line in sys.stdin]
+    mp3_filenames = [line.strip() for line in sys.stdin if line]
     delete_files(bucket_name, mp3_filenames)

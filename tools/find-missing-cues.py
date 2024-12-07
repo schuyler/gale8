@@ -25,7 +25,10 @@ def main():
         if obj.key.endswith(".json") and obj.last_modified >= start_date:
             cue_file_content = json.loads(obj.get()['Body'].read().decode('utf-8'))
             if not check_for_keywords(cue_file_content):
-                print(obj.key)
+                # Extract the {...}.mp3 part
+                filename = obj.key[:-5]  # Remove ".json"
+                filename = filename[len(prefix):] #Remove "cues/" prefix
+                print(filename)
 
 if __name__ == "__main__":
     main()
