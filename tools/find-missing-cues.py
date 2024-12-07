@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 def check_for_keywords(cue_file_content):
     """Checks if a cue file contains any of the required keywords."""
-    keywords = ["shipping", "forecast", "bbc", "radio"]
+    keywords = ["shipping", "forecast", "bulletin", "bbc", "radio"]
     if "cues" not in cue_file_content:
         return False
     cues = cue_file_content["cues"]
