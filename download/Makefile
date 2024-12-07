@@ -60,25 +60,19 @@ check-launch:
 	python3 download_forecast.py -s
 
 create-rule-0048: check-account
-	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 00 48 12
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 00 48 12 '*'
 
 delete-rule-0048: check-account
 	./del-rule.sh $(FUNCTION) 00 48
 
 create-rule-0520: check-account
-	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 05 20 12
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 05 20 12 '*'
 
 delete-rule-0520: check-account
 	./del-rule.sh $(FUNCTION) 05 20
 
-create-rule-1201: check-account
-	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 12 01 5
-
-delete-rule-1201: check-account
-	./del-rule.sh $(FUNCTION) 12 01
-
 create-rule-1754: check-account
-	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 17 54 0,6
+	./gen-rule.sh $(AWS_REGION) $(AWS_ACCOUNT) $(FUNCTION) 17 54 6 0,6
 
 delete-rule-1754: check-account
 	./del-rule.sh $(FUNCTION) 17 54
