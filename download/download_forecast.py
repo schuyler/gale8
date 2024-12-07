@@ -11,6 +11,7 @@ import boto3
 import pytz
 from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
+import select
 
 london = pytz.timezone('Europe/London')
 
@@ -53,77 +54,75 @@ def notify(msg):
 
 def download_stream(stream, target, secs):
     logging.info(f"downloading {stream} for {secs} s")
-    
-    # Use larger buffers and more resilient settings
+
     ffmpeg_cmd = [
         'ffmpeg',
-        '-loglevel', 'warning',  # Show warnings for debugging
-        '-y',
-        '-reconnect', '1',  # Enable reconnection
-        '-reconnect_at_eof', '1',
+        '-loglevel', 'warning',
+        '-reconnect', '1',
+        '-reconnect_on_network_error', '1',
         '-reconnect_streamed', '1',
-        '-reconnect_delay_max', '10',  # Maximum reconnection delay
+        '-reconnect_delay_max', '10',
         '-i', stream,
-        '-bufsize', '8192k',  # Increase buffer size
+        '-bufsize', '8192k',
         '-f', 'mp3',
-        '-progress', 'pipe:1',  # Output progress to pipe
         target
     ]
-    
+
+    logging.info(f"executing {' '.join(ffmpeg_cmd)}")
     start_time = time.time()
     end_time = start_time + secs
-    
+
     try:
         proc = subprocess.Popen(
             ffmpeg_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            universal_newlines=True
+            universal_newlines=True,
+            bufsize=1,
+            shell=False
         )
-        
-        last_progress_time = start_time
+
         while time.time() < end_time:
-            # Check if process is still alive
-            if proc.poll() is not None:
-                raise Exception(f"ffmpeg process died prematurely with return code {proc.returncode}")
-            
-            # Read progress to prevent pipe buffer from filling
-            if proc.stdout.readable():
-                line = proc.stdout.readline()
+            # Use select to check for data without blocking
+            readable, _, _ = select.select([proc.stdout, proc.stderr], [], [], 0.1)
+
+            for stream in readable:
+                line = stream.readline()
                 if line:
-                    last_progress_time = time.time()
-                
-            # Check for stalled download (no progress for 30 seconds)
-            if time.time() - last_progress_time > 30:
-                logging.warning("Download appears stalled, restarting ffmpeg")
-                proc.terminate()
-                raise Exception("Download stalled")
-            
-            time.sleep(1)
-        
-        # Graceful shutdown
-        logging.info("Initiating graceful shutdown of ffmpeg")
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)  # Give it 10 seconds to shut down gracefully
-        except subprocess.TimeoutExpired:
-            logging.warning("ffmpeg didn't terminate gracefully, forcing shutdown")
-            proc.kill()
-            proc.wait()
-        
-        if proc.returncode != 0 and proc.returncode != 255:
-            stderr_output = proc.stderr.read() if proc.stderr else "No error output"
+                    if stream == proc.stdout:
+                        logging.info(f"ffmpeg stdout: {line.strip()}")
+                    else:
+                        logging.warning(f"ffmpeg stderr: {line.strip()}")
+
+            # Check if process has finished
+            return_code = proc.poll()
+            if return_code is not None:
+                break
+
+        # Check for timeout
+        if proc.poll() is None:
+            logging.info("ffmpeg timeout reached. Terminating...")
+            proc.terminate()
+            proc.wait(timeout=5) # Wait for termination
+
+        # Check return code
+        if proc.returncode not in (0, 255):
+            stderr_output = proc.stderr.read()
             raise Exception(f"ffmpeg failed with return code {proc.returncode}. Error: {stderr_output}")
-        
+
         # Verify the output file exists and has content
         if not os.path.exists(target) or os.path.getsize(target) == 0:
             raise Exception("Output file is missing or empty")
-            
+
         return True
-        
+
+    except (subprocess.TimeoutExpired, select.error) as e:
+        logging.error(f"Download timed out or encountered an error: {str(e)}")
+        if os.path.exists(target):
+            os.remove(target)
+        raise
     except Exception as e:
         logging.error(f"Download failed: {str(e)}")
-        # Clean up partial file
         if os.path.exists(target):
             os.remove(target)
         raise
@@ -157,7 +156,7 @@ def wait_until(hour, minute):
 def record_stream(stream, bucket, prefix, duration):
     # Compute the filename at the minute we care about
     filename = generate_file_name()
-    with tempfile.TemporaryDirectory() as tempdir:
+    with tempfile.TemporaryDirectory(delete=False) as tempdir:
         target = os.path.join(tempdir, filename)
         if download_stream(stream, target, duration) \
                 and upload_file(target, bucket, prefix + filename):
@@ -173,17 +172,20 @@ def set_next_launch(test_date=None):
         start = london.localize(
             datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
             - timedelta(minutes=1))
-        logging.info(f"setting next launch for {start.isoformat()}")
 
         if now.dst() != start.dst():
             logging.info(f"*** difference in DST detected for tomorrow at {hour:02}:{minute:02}! ***")
 
         start = start.astimezone(pytz.utc)  # Eventbridge schedules are in UTC!!!
+        rule_name = f"download-forecast-{hour:02}{minute:02}"
+        cron_expr = f"cron({start.minute} {start.hour} ? * {days_of_week} *)"
+
         if not test_date:
-            events.put_rule(
-                Name=f"download-forecast-{hour:02}{minute:02}",
-                ScheduleExpression=f"cron({start.minute} {start.hour} ? * {days_of_week} *)"
-            )
+            logging.info(f"setting launch for {rule_name} to {cron_expr}")
+            events.put_rule(Name=rule_name, ScheduleExpression=cron_expr)
+        else:
+            logging.info(f"(not) setting launch for {rule_name} to {cron_expr}")
+
 
 def start_transcription(file):
     lambda_ = boto3.client('lambda')
