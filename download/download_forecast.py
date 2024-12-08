@@ -119,7 +119,7 @@ def download_stream(stream, target, secs):
     if not os.path.exists(target) or os.path.getsize(target) == 0:
         raise Exception("Output file is missing or empty")
 
-    logging.info(f"downloaded {segment_number+1} segments to {target}")
+    logging.info(f"downloaded {segment_number} segments to {target}")
     return True
 
 
