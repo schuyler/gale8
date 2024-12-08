@@ -57,9 +57,11 @@ def download_stream(stream, target, secs):
 
     ffmpeg_cmd = [
         'ffmpeg',
-        '-loglevel', 'warning',
+        '-loglevel', 'info',
         '-reconnect', '1',
+        '-reconnect_at_eof', '1',
         '-reconnect_on_network_error', '1',
+        '-reconnect_on_http_error', '1',
         '-reconnect_streamed', '1',
         '-reconnect_delay_max', '10',
         '-i', stream,
