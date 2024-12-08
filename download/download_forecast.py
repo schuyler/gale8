@@ -4,14 +4,11 @@ import os.path
 import logging
 import tempfile
 import json
-import signal
 import subprocess
 import traceback
 import boto3
 import pytz
 from datetime import datetime, timedelta
-from botocore.exceptions import ClientError
-import select
 
 london = pytz.timezone('Europe/London')
 
@@ -107,8 +104,7 @@ def download_stream(stream, target, secs):
             proc.terminate()
             proc.wait()
         if proc.returncode not in (0, 255):
-            stderr_output = proc.stderr.read()
-            logging.error(f"ffmpeg failed with return code {proc.returncode}. Error: {stderr_output}\n")
+            logging.error(f"ffmpeg failed with return code {proc.returncode}")
         # Start a new segment
         segment_number += 1
 
