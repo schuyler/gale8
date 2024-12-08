@@ -52,14 +52,13 @@ def notify(msg):
         Message=traceback.format_exc()
     )
 
-def download_stream(stream, target, secs):
-    logging.info(f"downloading {stream} for {secs} s")
-
+def download_stream_segment(stream, target):
     ffmpeg_cmd = [
         'ffmpeg',
         '-loglevel', 'info',
         '-reconnect', '1',
-        '-reconnect_at_eof', '1',
+        # Can't use this because we're downloading an m3u8 playlist
+        # '-reconnect_at_eof', '1',
         '-reconnect_on_network_error', '1',
         '-reconnect_on_http_error', '1',
         '-reconnect_streamed', '1',
@@ -71,11 +70,7 @@ def download_stream(stream, target, secs):
     ]
 
     logging.info(f"executing {' '.join(ffmpeg_cmd)}")
-    start_time = time.time()
-    end_time = start_time + secs
-
-    try:
-        proc = subprocess.Popen(
+    proc = subprocess.Popen(
             ffmpeg_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -83,51 +78,48 @@ def download_stream(stream, target, secs):
             bufsize=1,
             shell=False
         )
+    return proc 
 
-        while time.time() < end_time:
-            # Use select to check for data without blocking
-            readable, _, _ = select.select([proc.stdout, proc.stderr], [], [], 0.1)
+def download_stream(stream, target, secs):
+    logging.info(f"downloading {stream} for {secs} s")
 
-            for stream in readable:
-                line = stream.readline()
-                if line:
-                    if stream == proc.stdout:
-                        logging.info(f"ffmpeg stdout: {line.strip()}")
-                    else:
-                        logging.warning(f"ffmpeg stderr: {line.strip()}")
+    start_time = time.time()
+    end_time = start_time + secs
+    segment_number = 0
+    max_segments = 20
 
-            # Check if process has finished
-            return_code = proc.poll()
-            if return_code is not None:
-                break
-
-        # Check for timeout
-        if proc.poll() is None:
-            logging.info("ffmpeg timeout reached. Terminating...")
-            proc.terminate()
-            proc.wait(timeout=5) # Wait for termination
-
-        # Check return code
+    # Loop until the end time is reached
+    while time.time() < end_time and segment_number < max_segments:
+        logging.info(f"downloading segment {segment_number}")
+        proc = download_stream_segment(stream, f"{target}.{segment_number:03d}")
+        try:
+            output, errs = proc.communicate(timeout=end_time - time.time())
+        except subprocess.TimeoutExpired:
+            pass
+        if output:
+            logging.info("ffmpeg output: {output}")
+        if errs:
+            logging.warning("ffmpeg error: {errs}")
         if proc.returncode not in (0, 255):
             stderr_output = proc.stderr.read()
-            raise Exception(f"ffmpeg failed with return code {proc.returncode}. Error: {stderr_output}")
+            logging.error(f"ffmpeg failed with return code {proc.returncode}. Error: {stderr_output}\n")
+        # Start a new segment
+        segment_number += 1
 
-        # Verify the output file exists and has content
-        if not os.path.exists(target) or os.path.getsize(target) == 0:
-            raise Exception("Output file is missing or empty")
+    # Take all of the target segments and concatenate them
+    with open(target, 'wb') as f:
+        for i in range(segment_number + 1):
+            segment = f"{target}.{i:03d}"
+            with open(segment, 'rb') as s:
+                f.write(s.read())
 
-        return True
+    # Verify the output file exists and has content
+    if not os.path.exists(target) or os.path.getsize(target) == 0:
+        raise Exception("Output file is missing or empty")
 
-    except (subprocess.TimeoutExpired, select.error) as e:
-        logging.error(f"Download timed out or encountered an error: {str(e)}")
-        if os.path.exists(target):
-            os.remove(target)
-        raise
-    except Exception as e:
-        logging.error(f"Download failed: {str(e)}")
-        if os.path.exists(target):
-            os.remove(target)
-        raise
+    logging.info(f"downloaded {segment_number+1} segments to {target}")
+    return True
+
 
 def upload_file(filename, bucket, object_name=None):
     if object_name is None:
