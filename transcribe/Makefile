@@ -8,7 +8,10 @@ IMAGE_URI=$(ECR)/$(IMAGE)
 
 all: update-function
 
-build-latest:
+check-syntax: transcribe_forecast.py
+	python3 -m py_compile transcribe_forecast.py
+
+build-latest: check-syntax
 	docker build . -t $(IMAGE)
 
 build-batch: build-latest

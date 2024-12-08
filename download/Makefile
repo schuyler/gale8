@@ -8,7 +8,10 @@ IMAGE_URI=$(ECR)/$(IMAGE)
 
 all: update-function check-launch
 
-build-latest:
+check-syntax: download_forecast.py
+	python3 -m py_compile download_forecast.py
+
+build-latest: check-syntax
 	docker build . -t $(IMAGE)
 
 run: build-latest

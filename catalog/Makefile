@@ -10,6 +10,9 @@ clean:
 check-account:
 	@[ -n "$(ACCOUNT)" ] || (echo "Try again by passing ACCOUNT to make" && false)
 
+check-syntax-%: %.py
+	python3 -m py_compile $*.py
+
 create-function-%: check-account %.zip
 	aws lambda create-function \
 		--function-name `echo $* | tr _ -` \
@@ -27,7 +30,7 @@ update-function-%: %.zip
 delete-function-%:
 	aws lambda delete-function --function-name `echo $* | tr _ -`
 
-%.zip: %.py
+%.zip: %.py check-syntax-%
 	mkdir build
 	cp $*.py build
 	(cd build && zip -9qr - .) > $*.zip

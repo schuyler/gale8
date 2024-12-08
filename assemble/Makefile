@@ -8,7 +8,10 @@ IMAGE_URI=$(ECR)/$(IMAGE)
 
 all: update-function
 
-build-latest:
+check-syntax: assemble_stream.py
+	python3 -m py_compile assemble_stream.py
+
+build-latest: check-syntax
 	docker build . -t $(IMAGE)
 
 run: build-latest
