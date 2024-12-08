@@ -58,6 +58,7 @@ def download_stream_segment(stream, target):
         '-loglevel', 'info',
         '-reconnect', '1',
         # Can't use this because we're downloading an m3u8 playlist
+        # https://medium.com/intrasonics/robust-continuous-audio-recording-c1948895bb49
         # '-reconnect_at_eof', '1',
         '-reconnect_on_network_error', '1',
         '-reconnect_on_http_error', '1',
@@ -92,6 +93,7 @@ def download_stream(stream, target, secs):
     while time.time() < end_time and segment_number < max_segments:
         logging.info(f"downloading segment {segment_number}")
         proc = download_stream_segment(stream, f"{target}.{segment_number:03d}")
+        output, errs = None, None
         try:
             output, errs = proc.communicate(timeout=end_time - time.time())
         except subprocess.TimeoutExpired:
@@ -100,6 +102,10 @@ def download_stream(stream, target, secs):
             logging.info("ffmpeg output: {output}")
         if errs:
             logging.warning("ffmpeg error: {errs}")
+        if proc.poll() is None:
+            logging.info("terminating ffmpeg process")
+            proc.terminate()
+            proc.wait()
         if proc.returncode not in (0, 255):
             stderr_output = proc.stderr.read()
             logging.error(f"ffmpeg failed with return code {proc.returncode}. Error: {stderr_output}\n")
