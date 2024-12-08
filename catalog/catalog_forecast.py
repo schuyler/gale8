@@ -48,7 +48,7 @@ def handle_event(event, context):
     logging.info(f"Attempting to catalog {file}")
 
     if "cues" not in event:
-        cue_file = cue_prefix + os.path.basename(mp3_file) + ".json"
+        cue_file = config["cue_prefix"] + os.path.basename(file) + ".json"
         cues = download_json(bucket, cue_file)
     else:
         cues = event["cues"]
