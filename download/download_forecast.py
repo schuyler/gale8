@@ -114,7 +114,7 @@ def download_stream(stream, target, secs):
 
     # Take all of the target segments and concatenate them
     with open(target, 'wb') as f:
-        for i in range(segment_number + 1):
+        for i in range(segment_number):
             segment = f"{target}.{i:03d}"
             with open(segment, 'rb') as s:
                 f.write(s.read())
