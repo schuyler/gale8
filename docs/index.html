@@ -151,12 +151,12 @@ function updateNowPlaying() {
     $("#fileTime").html(formatFileDate(player.src));
 }
 
-function showPlayButton() {
-    $("#playButton")[0].style.visibility = "visible";
-}
-
-function hidePlayButton() {
-    $("#playButton")[0].style.visibility = "hidden";
+function updatePlayButtonState() {
+    if (player.paused || isLoading) {
+        $("#playButton")[0].style.visibility = "visible";
+    } else {
+        $("#playButton")[0].style.visibility = "hidden";
+    }
 }
 
 function startFadeIn(fadeSecs) {
@@ -187,12 +187,9 @@ function startFadeOut(fadeSecs) {
 }
 
 function startPlayback() {
-    // console.log("startPlayback");
     player.play()
         .then(function() {
             isLoading = isEnding = false;
-            // Hide the play button only when the media is definitely rolling
-            $(player).on('playing', hidePlayButton);
         })
         .catch(function(error) {
             isLoading = isEnding = false;
@@ -204,11 +201,11 @@ function startPlayback() {
                 setTimeout(playNextFile, 500);
             }
         });
-    showPlayButton(); // Show the play button until playback starts
+    updatePlayButtonState(); // Ensure play button is visible until 'playing' event occurs
 }
 
 function pausePlayback() {
-    showPlayButton();
+    updatePlayButtonState();
     player.pause();
 }
 
@@ -267,14 +264,18 @@ function loadCues(file) {
 
 function loadAudio(cue) {
     let hasLoaded = new Promise((resolve, reject) => {
-        $(player).on("durationchange", () => {
+        $(player).on("loadeddata", () => {
             resolve(cue);
-            $(player).off("durationchange");
+            $(player).off("loadeddata");
+        });
+        $(player).on("error", () => {
+            reject(new Error("Failed to load audio"));
+            $(player).off("error");
         });
     });
-    player.src = archiveUrl + cue.file + "#t=" + cue.start + "," + cue.end;
     $("#fileTime").html("Loading...");
     $("#timeLeft").html("--:--");
+    player.src = archiveUrl + cue.file + "#t=" + cue.start + "," + cue.end;
     player.load();
     return hasLoaded;
 }
@@ -282,6 +283,7 @@ function loadAudio(cue) {
 function playFile(file) {
     if (isLoading) return;
     isLoading = true;
+    updatePlayButtonState(); // Show play button while loading
     loadCues(file)
         .then(loadAudio)
         .then(cue => {
@@ -290,11 +292,12 @@ function playFile(file) {
             updateNowPlaying();
             updateTimeLeft();
             startFadeIn(audioFade);
-            startPlayback();
+            return startPlayback();
         })
         .catch(err => {
             console.log("playFile failed:", err);
             isLoading = false;
+            updatePlayButtonState();
             setTimeout(playNextFile, 500);
         });
 }
@@ -429,15 +432,17 @@ function init() {
     player = getPlayer();
     $(player).on('ended', playNextFile);
     $(player).on('timeupdate', updateTimeLeft);
+    $(player).on('playing', updatePlayButtonState);
+    $(player).on('pause', updatePlayButtonState);
     $("#broadcastYear").change(yearSelected);
     $("#broadcastMonth").change(monthSelected);
     $("#broadcastDay").change(daySelected);
     $("#broadcastTime").change(broadcastSelected);
+    updatePlayButtonState(); // Show play button initially
     fetch(archiveUrl + "catalog.json")
         .then(res => res.json())
         .then(data => loadCatalog(data))
         .then(() => {
-            showPlayButton(); // Ensure the play button is visible initially
             playFile(getLastBroadcast());
         });
 }
@@ -460,7 +465,7 @@ $(document).ready(init);
         </a>
     </div>
     <div id="controls">
-        <audio id="player" src="" preload="none"></audio>
+        <audio id="player" preload="none"></audio>
     </div>
     <div id="nowPlaying">
         <span class="shaded">Now Playing:</span>
