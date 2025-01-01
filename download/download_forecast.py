@@ -96,9 +96,9 @@ def download_stream(stream, target, secs):
         except subprocess.TimeoutExpired:
             pass
         if output:
-            logging.info("ffmpeg output: {output}")
+            logging.info(f"ffmpeg output: {output}")
         if errs:
-            logging.warning("ffmpeg error: {errs}")
+            logging.warning(f"ffmpeg error: {errs}")
         if proc.poll() is None:
             logging.info("terminating ffmpeg process")
             proc.terminate()
