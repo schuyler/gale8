@@ -275,6 +275,10 @@ function loadAudio(cue) {
     });
     $("#fileTime").html("Loading...");
     $("#timeLeft").html("--:--");
+    // Set the URL location fragment to the current file, so that the user can bookmark it.
+    // minus the mp3 part
+    const hash = "#" + cue.file.substring(0, cue.file.length-4);
+    history.replaceState(null, null, window.location.pathname + hash);
     player.src = archiveUrl + cue.file + "#t=" + cue.start + "," + cue.end;
     player.load();
     return hasLoaded;
@@ -443,7 +447,13 @@ function init() {
         .then(res => res.json())
         .then(data => loadCatalog(data))
         .then(() => {
-            playFile(getLastBroadcast());
+            const hash = window.location.hash.substring(1);
+            // If the URL has a hash, try to play that file.
+            if (hash) {
+                playFile(hash + ".mp3");
+            } else {
+                playFile(getLastBroadcast());
+            }
         });
 }
 
@@ -455,7 +465,7 @@ $(document).ready(init);
     <div id="container">
     <h1>And now, the Shipping Forecast</h1>
     <div id="map">
-        <a href="#" onClick="togglePlayback(); resetSleepTimer()">
+        <a href="javascript:void(0)" onClick="togglePlayback(); return resetSleepTimer()">
             <div><img src="area_map.jpg" /></div>
             <div id="playButton">
                 <svg viewBox="0 0 24 24">
@@ -473,14 +483,14 @@ $(document).ready(init);
         <span class="shaded">Time Left:</span>
         <span id="timeLeft">--:--</span>
         <span class="shaded">
-            <a href="#" title="Skip 30s" onClick="skipAhead(30); resetSleepTimer()">
+            <a href="javascript:void(0)" title="Skip 30s" onClick="skipAhead(30); return resetSleepTimer()">
                 <svg class="control-icon" viewBox="0 0 24 24">
                     <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/>
                 </svg>
             </a>
         </span>
         <span class="shaded">
-            <a href="#" title="Next broadcast" onClick="playNextFile(); resetSleepTimer()">
+            <a href="javascript:void(0)" title="Next broadcast" onClick="playNextFile(); return resetSleepTimer()">
                 <svg class="control-icon" viewBox="0 0 24 24">
                     <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
                 </svg>
