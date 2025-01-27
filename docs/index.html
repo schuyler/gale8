@@ -411,6 +411,22 @@ function broadcastSelected() {
     playFile(file);
 } 
 
+function getBroadcastFromHash() {
+    const hash = window.location.hash.substring(1);
+    if (!hash) return null;
+    // Find the file in the catalog that matches the hash by breaking it down into parts.
+    // The format is YYYYMMDDZHHMM.mp3
+    let yr = hash.substring(0, 4);
+    let mo = hash.substring(4, 6);
+    let day = hash.substring(6, 8);
+    let timing = hash.substring(9, 15);
+    // console.log("getBroadcastFromHash", yr, mo, day, timing);
+    if (yr in catalog && mo in catalog[yr] && day in catalog[yr][mo] && catalog[yr][mo][day].indexOf(timing) >= 0) {
+        return [yr, mo, day, "Z", timing, ".mp3"].join("");
+    }
+    return null;
+}
+
 function getLastBroadcast() {
     const lastKey = (obj) => Object.keys(obj).sort().reverse()[0];
     let yr = lastKey(catalog);
@@ -443,14 +459,21 @@ function init() {
     $("#broadcastDay").change(daySelected);
     $("#broadcastTime").change(broadcastSelected);
     updatePlayButtonState(); // Show play button initially
+    $(window).on("hashchange", () => {
+        const filename = getBroadcastFromHash();
+        console.log("Hash changed:", filename);
+        if (filename) {
+            playFile(filename);
+        }
+    });
     fetch(archiveUrl + "catalog.json")
         .then(res => res.json())
         .then(data => loadCatalog(data))
         .then(() => {
-            const hash = window.location.hash.substring(1);
-            // If the URL has a hash, try to play that file.
-            if (hash) {
-                playFile(hash + ".mp3");
+            const filename = getBroadcastFromHash();
+            // If the URL has a fragment, try to play that file.
+            if (filename) {
+                playFile(filename);
             } else {
                 playFile(getLastBroadcast());
             }
