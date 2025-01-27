@@ -127,7 +127,7 @@ def upload_file(filename, bucket, object_name=None):
     if object_name is None:
         object_name = os.path.basename(filename)
     s3_client = boto3.client('s3')
-    extra_args = {'ACL': 'public-read'}
+    extra_args = {'ACL': 'public-read', 'ContentType': 'audio/mpeg'}
     logging.info(f"uploading {filename} to s3://{bucket}/{object_name}")
     if in_production():
         s3_client.upload_file(
