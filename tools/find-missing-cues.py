@@ -22,7 +22,7 @@ def main():
     start_date = datetime(2024, 4, 1, tzinfo=timezone.utc)
 
     for obj in bucket.objects.filter(Prefix=prefix):
-        if obj.key.endswith(".json") and obj.last_modified >= start_date:
+        if obj.key.endswith(".json"): #nd obj.last_modified >= start_date:
             cue_file_content = json.loads(obj.get()['Body'].read().decode('utf-8'))
             if not check_for_keywords(cue_file_content):
                 # Extract the {...}.mp3 part

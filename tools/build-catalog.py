@@ -18,7 +18,8 @@ if len(sys.argv) > 1:
 for obj in bucket.objects.filter(Prefix=f"{prefix}/"):
     m = filename.match(obj.key)
     if not m:
-        print('no match:', obj.key, file=sys.stderr)
+        if obj.key != f"{prefix}/catalog.json":
+            print('no match:', obj.key, file=sys.stderr)
         continue
     if obj.key in exclude:
         print('excluded:', obj.key, file=sys.stderr)
@@ -34,3 +35,10 @@ for obj in bucket.objects.filter(Prefix=f"{prefix}/"):
 
 with open("catalog.json", "w") as f:
     json.dump(catalog, f)
+
+# Upload the file if it's not a dry run
+if len(sys.argv) > 2 and sys.argv[2] == "--dry-run":
+    sys.exit(0)
+
+# Upload the catalog to the existing bucket object making it public and setting the correct content type
+bucket.put_object(Key="archive/catalog.json", Body=json.dumps(catalog), ACL="public-read", ContentType="application/json")

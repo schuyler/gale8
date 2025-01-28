@@ -13,3 +13,4 @@ __pycache__
 .aider.*
 .aider*
 .env
+tools/cues/

@@ -14,7 +14,8 @@ def main(dry_run=False):
     bucket_name = 'gale8-uk'
     
     for line in sys.stdin:
-        filename, length = line.strip().split()
+        #filename, length = line.strip().split()
+        filename = line.strip()
         mp3_key = f'archive/{filename}'
         json_key = f'cues/{filename}.json'
         broken_mp3_key = f'broken/{filename}'
